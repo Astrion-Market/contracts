@@ -1,14 +1,16 @@
 # Deployment workflows.
 
+DRY_RUN ?= 0
+
 .PHONY: deploy deploy-all deploy-contract deploy-force deploy-testnet deploy-mainnet deploy-local addresses
 
 deploy: deploy-all
 
 deploy-all: preflight
-	CONTRACT="$(CONTRACT)" bash scripts/deploy.sh "$(NETWORK)" "$(SOURCE)"
+	CONTRACT="$(CONTRACT)" DRY_RUN="$(DRY_RUN)" bash scripts/deploy.sh "$(NETWORK)" "$(SOURCE)"
 
 deploy-force: preflight
-	CONTRACT="$(CONTRACT)" FORCE=1 bash scripts/deploy.sh "$(NETWORK)" "$(SOURCE)"
+	CONTRACT="$(CONTRACT)" FORCE=1 DRY_RUN="$(DRY_RUN)" bash scripts/deploy.sh "$(NETWORK)" "$(SOURCE)"
 
 deploy-contract: preflight build
 	@test -n "$(CONTRACT)" || { printf '%s\n' 'Usage: make deploy-contract CONTRACT=reader NETWORK=testnet SOURCE=deployer'; exit 1; }

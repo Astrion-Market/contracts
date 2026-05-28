@@ -915,6 +915,44 @@ contracts/
 
 ---
 
+## Upgrade Policy
+
+Every core contract exposes an `upgrade(env, new_wasm_hash)` function that authenticates the stored admin before calling `env.deployer().update_current_contract_wasm(new_wasm_hash)`. Upgrades must be deliberate, role-gated decisions.
+
+| Contract | Upgradeable | Role required | Notes |
+|---|---|---|---|
+| `data_store` | ✅ Yes | admin | Stores all protocol state. Upgrade only with a verified migration plan. |
+| `role_store` | ✅ Yes | admin | Controls all access gates. Upgrade with extreme caution. |
+| `market_factory` | ✅ Yes | admin | Owns market deployment logic. Review new market token wasm hash. |
+| `market_token` | ❌ Immutable | — | LP token. Once deployed per market it must never change. |
+| `oracle` | ✅ Yes | admin | Pricing source. Validate new price feed logic before upgrade. |
+| `deposit_handler` | ✅ Yes | admin | — |
+| `withdrawal_handler` | ✅ Yes | admin | — |
+| `order_handler` | ✅ Yes | admin | — |
+| `liquidation_handler` | ✅ Yes | admin | — |
+| `adl_handler` | ✅ Yes | admin | — |
+| `fee_handler` | ✅ Yes | admin | — |
+| `referral_storage` | ✅ Yes | admin | — |
+| `reader` | ✅ Yes | admin | Read-only; upgrade risk is low. |
+| `exchange_router` | ✅ Yes | admin | User entry point. Test multicall paths after every upgrade. |
+
+**Upgrade workflow:**
+
+```sh
+# Single contract
+make upgrade-contract CONTRACT=deposit_handler NETWORK=testnet SOURCE=deployer
+
+# Dry-run (prints planned actions, submits nothing)
+make upgrade-all DRY_RUN=1 NETWORK=testnet SOURCE=deployer
+
+# All upgradeable contracts
+make upgrade-all NETWORK=testnet SOURCE=deployer
+```
+
+`market_token` is listed in `IMMUTABLE_CONTRACTS` in `mx/upgrade.mk` and is skipped by `make upgrade-all`.
+
+---
+
 ## Contributing
 
 SO4.market is being built in the open. All eight implementation phases are complete — the full protocol logic is live in Rust/Soroban. See the issue tracker for integration tests, optimisation tasks, and frontend work.
