@@ -143,6 +143,17 @@ impl OrderHandler {
         env.storage().instance().set(&InstanceKey::OrderVault, &order_vault);
     }
 
+    /// Upgrade the contract wasm. Only the stored admin may call this.
+    ///
+    /// Storage layout (InstanceKey and PositionStorageKey / OrderStorageKey) must not
+    /// change between versions — existing persistent entries remain readable after upgrade.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
+        let admin: Address = env.storage().instance().get(&InstanceKey::Admin)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::NotInitialized));
+        admin.require_auth();
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
+
     /// Create a new order and record collateral in the order vault.
     ///
     /// # Collateral model (canonical — issue #47)
@@ -631,7 +642,7 @@ fn remove_order(env: &Env, data_store: &Address, caller: &Address, key: &BytesN<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, token::StellarAssetClient, Env, Vec};
+    use soroban_sdk::{testutils::{Address as _, BytesN as _}, token::StellarAssetClient, BytesN, Env, Vec};
     use role_store::{RoleStore, RoleStoreClient as RsClient};
     use data_store::{DataStore, DataStoreClient as DsClient};
     use oracle::{Oracle, OracleClient as OClient};
@@ -1070,5 +1081,80 @@ mod tests {
         let (_hc, key) = create_increase_order(&w, OrderType::MarketIncrease, 0);
         let intruder = Address::generate(&w.env);
         OrderHandlerClient::new(&w.env, &w.ord_handler).freeze_order(&intruder, &key);
+    }
+
+    // ── Issue #10: upgrade entrypoint tests ───────────────────────────────────
+
+    /// Admin can call upgrade; instance storage survives the wasm swap.
+    #[test]
+    fn upgrade_admin_succeeds() {
+        let w = setup(); // mock_all_auths active
+
+        // Use a random hash — mock host does not validate wasm bytes.
+        OrderHandlerClient::new(&w.env, &w.ord_handler)
+            .upgrade(&BytesN::random(&w.env));
+
+        // Admin must still be readable from instance storage after upgrade.
+        let admin_after: Address = w.env.as_contract(&w.ord_handler, || {
+            w.env.storage().instance().get(&InstanceKey::Admin).unwrap()
+        });
+        assert_eq!(admin_after, w.admin);
+    }
+
+    /// Calling upgrade without the admin's authorisation must revert.
+    #[test]
+    #[should_panic]
+    fn upgrade_non_admin_reverts() {
+        // Fresh env — require_auth() is not mocked.
+        let env = Env::default();
+
+        let admin     = Address::generate(&env);
+        let rs        = Address::generate(&env);
+        let ds        = Address::generate(&env);
+        let oracle    = Address::generate(&env);
+        let ord_vault = Address::generate(&env);
+
+        let ord = env.register(OrderHandler, ());
+
+        // Seed instance storage directly to skip initialize() auth.
+        env.as_contract(&ord, || {
+            env.storage().instance().set(&InstanceKey::Initialized, &true);
+            env.storage().instance().set(&InstanceKey::Admin,       &admin);
+            env.storage().instance().set(&InstanceKey::RoleStore,   &rs);
+            env.storage().instance().set(&InstanceKey::DataStore,   &ds);
+            env.storage().instance().set(&InstanceKey::Oracle,      &oracle);
+            env.storage().instance().set(&InstanceKey::OrderVault,  &ord_vault);
+        });
+
+        // No auth context provided — must panic at admin.require_auth().
+        let hash = BytesN::from_array(&env, &[0u8; 32]);
+        OrderHandlerClient::new(&env, &ord).upgrade(&hash);
+    }
+
+    /// Orders and positions written before upgrade remain accessible after.
+    #[test]
+    fn upgrade_preserves_order_and_position_storage() {
+        let w = setup();
+        let fp = gmx_math::FLOAT_PRECISION;
+        set_prices(&w, 2_000 * fp);
+        seed_pool(&w);
+
+        // Create and execute an order so a position is written to persistent storage.
+        set_prices(&w, 2_000 * fp);
+        let (hc, key) = create_increase_order(&w, OrderType::MarketIncrease, 0);
+        hc.execute_order(&w.keeper, &key);
+
+        let pos_key = position_key(&w.env, &w.user, &w.market_tk, &w.long_tk, true);
+        assert!(hc.get_position(&pos_key).is_some(), "position must exist before upgrade");
+
+        // Upgrade.
+        OrderHandlerClient::new(&w.env, &w.ord_handler)
+            .upgrade(&BytesN::random(&w.env));
+
+        // Position in persistent storage must survive the upgrade.
+        assert!(
+            hc.get_position(&pos_key).is_some(),
+            "position must still be readable after upgrade"
+        );
     }
 }

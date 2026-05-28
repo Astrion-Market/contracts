@@ -105,6 +105,14 @@ impl LiquidationHandler {
         env.storage().instance().set(&InstanceKey::OrderHandler, &order_handler);
     }
 
+    /// Upgrade the contract wasm. Only the stored admin may call this.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
+        let admin: Address = env.storage().instance().get(&InstanceKey::Admin)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::NotInitialized));
+        admin.require_auth();
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
+
     /// Check if a position is currently liquidatable.
     pub fn check_liquidatable(
         env: Env,
@@ -216,9 +224,9 @@ fn load_market_props(env: &Env, data_store: &Address, market_token: &Address) ->
 mod tests {
     use super::*;
     use soroban_sdk::{
-        testutils::Address as _,
+        testutils::{Address as _, BytesN as _},
         token::StellarAssetClient,
-        Env, Vec,
+        BytesN, Env, Vec,
     };
     use role_store::{RoleStore, RoleStoreClient as RsClient};
     use data_store::{DataStore, DataStoreClient as DsClient};
@@ -546,5 +554,84 @@ mod tests {
         // Must revert with NotLiquidatable
         LiquidationHandlerClient::new(&w.env, &w.liq_handler)
             .liquidate_position(&w.liq_keeper, &w.user, &w.market_tk, &w.short_tk, &false);
+    }
+
+    // ── Issue #11: upgrade entrypoint tests ───────────────────────────────────
+
+    /// Admin can call upgrade; the call succeeds and instance storage is preserved.
+    #[test]
+    fn upgrade_admin_succeeds() {
+        let w = setup(); // mock_all_auths is active
+        let fp = FLOAT_PRECISION;
+        set_prices(&w, 2_000 * fp);
+        open_long_position(&w, ONE_TOKEN, 20_000 * fp);
+
+        // Use a random hash — the mock host does not validate wasm bytes.
+        let new_hash = BytesN::random(&w.env);
+        LiquidationHandlerClient::new(&w.env, &w.liq_handler).upgrade(&new_hash);
+
+        // Storage must survive the upgrade: admin is still readable.
+        let admin_after: Address = w.env.as_contract(&w.liq_handler, || {
+            w.env.storage().instance().get(&InstanceKey::Admin).unwrap()
+        });
+        assert_eq!(admin_after, w.admin);
+    }
+
+    /// Calling upgrade without the admin's authorisation must revert.
+    #[test]
+    #[should_panic]
+    fn upgrade_non_admin_reverts() {
+        // Fresh env — no mock_all_auths so require_auth() is not bypassed.
+        let env = Env::default();
+
+        let admin   = Address::generate(&env);
+        let rs      = Address::generate(&env);
+        let ds      = Address::generate(&env);
+        let oracle  = Address::generate(&env);
+        let oh      = Address::generate(&env);
+
+        let liq = env.register(LiquidationHandler, ());
+
+        // Seed instance storage directly, bypassing initialize() auth.
+        env.as_contract(&liq, || {
+            env.storage().instance().set(&InstanceKey::Initialized, &true);
+            env.storage().instance().set(&InstanceKey::Admin,       &admin);
+            env.storage().instance().set(&InstanceKey::RoleStore,   &rs);
+            env.storage().instance().set(&InstanceKey::DataStore,   &ds);
+            env.storage().instance().set(&InstanceKey::Oracle,      &oracle);
+            env.storage().instance().set(&InstanceKey::OrderHandler, &oh);
+        });
+
+        // Call upgrade with no auth context — must panic at admin.require_auth().
+        let hash = BytesN::from_array(&env, &[0u8; 32]);
+        LiquidationHandlerClient::new(&env, &liq).upgrade(&hash);
+    }
+
+    /// After upgrade the handler can still route a liquidation correctly.
+    #[test]
+    fn upgrade_post_upgrade_liquidation_still_works() {
+        let w = setup();
+        let fp = FLOAT_PRECISION;
+        set_prices(&w, 2_000 * fp);
+        open_long_position(&w, ONE_TOKEN, 20_000 * fp);
+
+        // Perform upgrade.
+        LiquidationHandlerClient::new(&w.env, &w.liq_handler)
+            .upgrade(&BytesN::random(&w.env));
+
+        // Crash price so position is liquidatable.
+        set_prices(&w, 100 * fp);
+
+        let pos_key = gmx_keys::position_key(&w.env, &w.user, &w.market_tk, &w.long_tk, true);
+        assert!(OHClient::new(&w.env, &w.ord_handler).get_position(&pos_key).is_some());
+
+        // Liquidation must still reach the new (same) logic and remove the key.
+        LiquidationHandlerClient::new(&w.env, &w.liq_handler)
+            .liquidate_position(&w.liq_keeper, &w.user, &w.market_tk, &w.long_tk, &true);
+
+        assert!(
+            OHClient::new(&w.env, &w.ord_handler).get_position(&pos_key).is_none(),
+            "position key must be gone after post-upgrade liquidation"
+        );
     }
 }

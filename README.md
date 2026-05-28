@@ -1011,11 +1011,46 @@ This matrix maps every contract under `contracts/*` to its state ownership, init
 
 ---
 
+## Protocol Glossary
+
+Definitions for every domain term used throughout the codebase and issue tracker.
+New contributors should read this before working on math, risk, or fee logic.
+
+| Term | Definition |
+|---|---|
+| **Market token** | The SEP-41 LP token minted by `market_factory` for a specific market (e.g. ETH/USD). Holding market tokens represents a proportional share of the market pool. Burned on withdrawal. Also called "GM token" in the UI. |
+| **Index token** | The asset whose price determines PnL for positions in a market (e.g. ETH). Not necessarily held in the pool — only its oracle price matters. |
+| **Long token** | The collateral token used for long positions (and one side of the LP pool). Typically the same asset as the index token (e.g. WETH for an ETH/USD market). |
+| **Short token** | The collateral token used for short positions (and the other side of the LP pool). Typically a stablecoin (e.g. USDC). |
+| **Pool amount** | The protocol-tracked balance of a specific token held by a market pool. Stored in `data_store` under `pool_amount_key(market, token)`. Updated on deposit, withdrawal, and position settlement. |
+| **Open interest (OI)** | The total notional USD size of all open positions on one side (long or short) of a market. Tracked separately for longs and shorts. Used to compute funding rates and ADL eligibility. |
+| **Funding fee** | A periodic payment between long and short position holders to balance open interest. The dominant side pays the subordinate side. Accumulated as `funding_amount_per_size` and settled when a position is increased, decreased, or liquidated. |
+| **Borrowing fee** | A fee charged to position holders for consuming pool liquidity. Proportional to position size and the fraction of the pool that is "borrowed" by open interest. Accumulated as a cumulative factor and settled on position change. |
+| **ADL (Auto-Deleveraging)** | A risk-management mechanism that partially closes the most profitable positions on the winning side when the pool's total unrealised PnL exceeds a safe threshold. Triggered by an ADL keeper via `adl_handler`. |
+| **Keeper** | An off-chain bot that submits transactions to execute pending requests (orders, deposits, withdrawals) and perform risk operations (liquidations, ADL). Keepers hold role-store roles such as `ORDER_KEEPER`, `LIQUIDATION_KEEPER`, and `ADL_KEEPER`. |
+| **Controller** | A privileged role (`CONTROLLER`) granted to handler contracts, allowing them to write to `data_store` and withdraw from market pools. Assigned by the admin during deployment. |
+| **Position** | An open leveraged trade, stored in `order_handler`'s persistent storage under `PositionStorageKey::Position(key)`. Tracks size, collateral, entry price, accumulated fee indices, and direction (long/short). |
+| **Collateral token** | The token deposited by a trader to back a position. For longs, this is the long token; for shorts, the short token. Determines which pool the collateral is drawn from. |
+| **Execution price** | The price at which an order is filled, adjusted for price impact. Derived from the oracle mid-price plus or minus the price impact of the trade on pool balance. |
+| **Price impact** | A fee/rebate that incentivises trades that balance pool OI. Negative impact (paid by trader) is added to the impact pool; positive impact (rebate to trader) is drawn from the impact pool. |
+| **Swap path** | An ordered list of market addresses through which tokens are routed in a multi-hop swap. Each hop transfers a token into one market pool and out of another. |
+| **Trigger price** | The oracle price level at which a limit or stop order becomes eligible for execution. Checked by the keeper before calling `execute_order`. |
+| **Acceptable price** | The worst execution price a trader will accept for a market order. Orders revert if the execution price exceeds this bound. |
+| **Min collateral factor** | A market-level parameter (stored in `data_store`) that defines the minimum collateral-to-size ratio below which a position is liquidatable. Example: 0.01 means a position is liquidatable when remaining collateral falls below 1 % of its USD size. |
+| **Realised PnL** | PnL that has been settled to the trader's account upon a decrease or liquidation. Distinct from unrealised PnL, which is the mark-to-market gain/loss on an open position. |
+| **Oracle** | The `oracle` contract that stores keeper-submitted, ed25519-verified price pairs (min/max) for each token. Prices are ledger-scoped — keepers must submit fresh prices each time they call an execution function. |
+| **Instance storage** | Soroban storage bucket for small, frequently-accessed values (admin address, contract addresses). Subject to TTL rent — the protocol bumps TTL on every interaction. |
+| **Persistent storage** | Soroban storage bucket for user-specific long-lived data (positions, orders, deposits). Also subject to TTL rent but with a longer minimum TTL. |
+| **FLOAT_PRECISION** | The fixed-point scaling factor `10^30` used for all USD values and rate accumulators in the protocol. |
+| **TOKEN_PRECISION** | `10^7` — Stellar's 7-decimal standard for token amounts. |
+
+---
+
 ## Contributing
 
 SO4.market is being built in the open. All nine implementation phases are complete — the full protocol logic is live in Rust/Soroban. See the issue tracker for integration tests, optimisation tasks, and frontend work.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for deployment, and upgrade workflow rules.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for deployment, upgrade workflow rules, and the PR checklist.
 
 ---
 
