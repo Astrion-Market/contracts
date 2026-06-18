@@ -411,7 +411,7 @@ impl VaultContract {
         absolute_cap: i128,
         relative_cap: i128,
     ) -> Result<(), VaultError> {
-        if absolute_cap < 0 || relative_cap < 0 || relative_cap > astrion_math::WAD {
+        if absolute_cap < 0 || !(0..=astrion_math::WAD).contains(&relative_cap) {
             return Err(VaultError::InvalidCap);
         }
         let args_hash = hash_cap_args(&env, &id, absolute_cap, relative_cap);
@@ -437,7 +437,7 @@ impl VaultContract {
         if caller != config.curator && !read_is_sentinel(&env, &caller) {
             return Err(VaultError::Unauthorized);
         }
-        if absolute_cap < 0 || relative_cap < 0 || relative_cap > astrion_math::WAD {
+        if absolute_cap < 0 || !(0..=astrion_math::WAD).contains(&relative_cap) {
             return Err(VaultError::InvalidCap);
         }
         let mut caps = read_caps(&env, &id);
