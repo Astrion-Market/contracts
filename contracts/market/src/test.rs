@@ -135,7 +135,7 @@ fn setup(env: &Env) -> Setup {
     IsolatedMarketContractClient::new(env, &market_id).initialize(
         &IsolatedMarketConfig {
             collateral_asset: collateral.clone(),
-            debt_asset: debt.clone(),
+            loan_asset: debt.clone(),
             oracle_adapter: oracle_id.clone(),
             ltv: WAD * 70 / 100,
             liquidation_threshold: WAD * 80 / 100,
@@ -190,7 +190,7 @@ fn test_double_initialize_fails() {
     let rate_model_id = env.register(MockRateModel, ());
     let result = market(&env, &s).try_initialize(&IsolatedMarketConfig {
         collateral_asset: s.collateral.clone(),
-        debt_asset: s.debt.clone(),
+        loan_asset: s.debt.clone(),
         oracle_adapter: s.oracle_id.clone(),
         ltv: WAD * 70 / 100,
         liquidation_threshold: WAD * 80 / 100,
@@ -223,7 +223,7 @@ fn test_initialize_invalid_config_fails() {
     let result = IsolatedMarketContractClient::new(&env, &market_id).try_initialize(
         &IsolatedMarketConfig {
             collateral_asset: collateral,
-            debt_asset: debt,
+            loan_asset: debt,
             oracle_adapter: oracle_id,
             ltv: WAD * 90 / 100,
             liquidation_threshold: WAD * 80 / 100,
@@ -277,7 +277,7 @@ fn test_supply_cap_enforced() {
     IsolatedMarketContractClient::new(&env, &market_id).initialize(
         &IsolatedMarketConfig {
             collateral_asset: collateral.clone(),
-            debt_asset: debt.clone(),
+            loan_asset: debt.clone(),
             oracle_adapter: oracle_id.clone(),
             ltv: WAD * 70 / 100,
             liquidation_threshold: WAD * 80 / 100,
@@ -404,7 +404,7 @@ fn test_borrow_cap_enforced() {
     IsolatedMarketContractClient::new(&env, &market_id).initialize(
         &IsolatedMarketConfig {
             collateral_asset: collateral.clone(),
-            debt_asset: debt.clone(),
+            loan_asset: debt.clone(),
             oracle_adapter: oracle_id,
             ltv: WAD * 70 / 100,
             liquidation_threshold: WAD * 80 / 100,

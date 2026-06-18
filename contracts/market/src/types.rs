@@ -3,17 +3,17 @@ use soroban_sdk::{contracttype, Address};
 /// Immutable configuration for an isolated market.
 ///
 /// Each isolated market is a self-contained lending pool between exactly two
-/// assets: a collateral asset and a debt asset.  A failure in one isolated
-/// market (bad oracle, exploited asset) cannot propagate to other markets or
-/// to the CorePool.
+/// assets: a collateral asset and a loan asset (Morpho terminology).  A failure
+/// in one isolated market (bad oracle, exploited asset) cannot propagate to
+/// other markets or to the CorePool.
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct IsolatedMarketConfig {
     /// The asset that borrowers deposit as collateral (e.g. MEMECOIN).
     pub collateral_asset: Address,
 
-    /// The asset that borrowers receive (e.g. USDC).
-    pub debt_asset: Address,
+    /// The asset supplied by lenders and borrowed by borrowers (e.g. USDC).
+    pub loan_asset: Address,
 
     /// Oracle adapter contract used for price feeds in this market.
     pub oracle_adapter: Address,
@@ -33,7 +33,7 @@ pub struct IsolatedMarketConfig {
     /// Maximum total supply of collateral_asset (raw units). 0 = no cap.
     pub supply_cap: i128,
 
-    /// Maximum total borrow of debt_asset (raw units). 0 = no cap.
+    /// Maximum total borrow of loan_asset (raw units). 0 = no cap.
     pub borrow_cap: i128,
 
     /// Interest rate model contract address.
@@ -64,6 +64,6 @@ pub struct IsolatedMarketState {
 pub struct UserPosition {
     /// Scaled supply balance of the collateral asset.
     pub scaled_supply: i128,
-    /// Scaled borrow balance of the debt asset.
+    /// Scaled borrow balance of the loan asset.
     pub scaled_borrow: i128,
 }

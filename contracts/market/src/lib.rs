@@ -6,7 +6,7 @@
 //!
 //! Each isolated market holds:
 //! - `collateral_asset` — the asset deposited as collateral
-//! - `debt_asset`       — the asset that can be borrowed
+//! - `loan_asset`       — the asset supplied by lenders and borrowed by borrowers
 //!
 //! Risk is ring-fenced: a bad oracle or insolvent position in this market
 //! cannot affect the CorePool or other isolated markets.
@@ -127,7 +127,7 @@ impl IsolatedMarketContract {
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.events().publish(
             (symbol_short!("init"), config.collateral_asset.clone()),
-            config.debt_asset.clone(),
+            config.loan_asset.clone(),
         );
         Ok(())
     }
@@ -139,7 +139,7 @@ impl IsolatedMarketContract {
     /// Supply `amount` of the collateral asset.
     ///
     /// Caller earns interest on their deposited collateral and can use it to
-    /// borrow the debt asset.
+    /// borrow the loan asset.
     pub fn supply(env: Env, supplier: Address, amount: i128) -> Result<(), MarketError> {
         supplier.require_auth();
         Self::guard_live(&env)?;
@@ -211,7 +211,7 @@ impl IsolatedMarketContract {
         Ok(())
     }
 
-    /// Borrow `amount` of the debt asset against supplied collateral.
+    /// Borrow `amount` of the loan asset against supplied collateral.
     pub fn borrow(env: Env, borrower: Address, amount: i128) -> Result<(), MarketError> {
         borrower.require_auth();
         Self::guard_live(&env)?;
@@ -238,7 +238,7 @@ impl IsolatedMarketContract {
         state.total_scaled_borrow += scaled;
         Self::set_position(&env, &borrower, &position);
         Self::set_state(&env, &state);
-        token::Client::new(&env, &config.debt_asset).transfer(
+        token::Client::new(&env, &config.loan_asset).transfer(
             &env.current_contract_address(),
             &borrower,
             &amount,
@@ -277,7 +277,7 @@ impl IsolatedMarketContract {
         state.total_scaled_borrow -= scaled;
         Self::set_position(&env, &on_behalf_of, &position);
         Self::set_state(&env, &state);
-        token::Client::new(&env, &config.debt_asset).transfer(
+        token::Client::new(&env, &config.loan_asset).transfer(
             &payer,
             env.current_contract_address(),
             &actual,
@@ -320,7 +320,7 @@ impl IsolatedMarketContract {
         } else {
             repay_amount
         };
-        let debt_value = wad_mul(actual, Self::price(&env, &config.debt_asset)?);
+        let debt_value = wad_mul(actual, Self::price(&env, &config.loan_asset)?);
         let with_bonus = wad_mul(debt_value, WAD + config.liquidation_bonus);
         let collateral = wad_div(with_bonus, Self::price(&env, &config.collateral_asset)?);
         let user_collateral = from_scaled(position.scaled_supply, state.supply_index);
@@ -338,7 +338,7 @@ impl IsolatedMarketContract {
         state.total_scaled_supply -= collateral_scaled;
         Self::set_position(&env, &borrower, &position);
         Self::set_state(&env, &state);
-        token::Client::new(&env, &config.debt_asset).transfer(
+        token::Client::new(&env, &config.loan_asset).transfer(
             &liquidator,
             env.current_contract_address(),
             &actual,
@@ -552,7 +552,7 @@ impl IsolatedMarketContract {
         }
         let collateral = from_scaled(position.scaled_supply, state.supply_index);
         let collateral_value = wad_mul(collateral, Self::price(env, &config.collateral_asset)?);
-        let debt_value = wad_mul(debt, Self::price(env, &config.debt_asset)?);
+        let debt_value = wad_mul(debt, Self::price(env, &config.loan_asset)?);
         Ok(health_factor(
             collateral_value,
             config.liquidation_threshold,
