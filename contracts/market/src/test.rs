@@ -2,7 +2,10 @@
 
 extern crate std;
 
-use soroban_sdk::{testutils::Address as _, token, Address, Env};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    token, Address, Env,
+};
 
 use astrion_math::WAD;
 
@@ -463,4 +466,249 @@ fn test_pause_blocks_supply() {
 
     m.unpause(&s.treasury);
     m.supply(&lender, &100_i128, &lender); // succeeds after unpause
+}
+
+// ---------------------------------------------------------------------------
+// Borrow / repay helpers
+// ---------------------------------------------------------------------------
+
+/// Register a lender who supplies `amount` of the loan asset.
+fn lender_supplies(env: &Env, s: &Setup, amount: i128) -> Address {
+    let lender = Address::generate(env);
+    mint_loan(env, s, &lender, amount);
+    market(env, s).supply(&lender, &amount, &lender);
+    lender
+}
+
+/// Register a borrower who posts `amount` of collateral.
+fn borrower_with_collateral(env: &Env, s: &Setup, amount: i128) -> Address {
+    let borrower = Address::generate(env);
+    mint_collateral(env, s, &borrower, amount);
+    market(env, s).supply_collateral(&borrower, &amount, &borrower);
+    borrower
+}
+
+// ---------------------------------------------------------------------------
+// Borrow
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_borrow_basic() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+
+    // Collateral $1000 × 80% = $800 power; borrow 70 × $10 = $700 → HF ≈ 1.14.
+    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+
+    assert_eq!(token::Client::new(&env, &s.loan).balance(&borrower), 70);
+    let state = m.get_market_state().unwrap();
+    assert_eq!(state.total_borrow_assets, 70);
+    assert!(m.get_user_position(&borrower).unwrap().borrow_shares > 0);
+}
+
+#[test]
+fn test_borrow_exceeds_collateral_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+
+    // Borrow 90 × $10 = $900 > $800 power → unhealthy.
+    let result = m.try_borrow(&borrower, &90_i128, &borrower, &borrower);
+    assert_eq!(result, Err(Ok(MarketError::HealthFactorTooLow)));
+}
+
+#[test]
+fn test_borrow_insufficient_liquidity_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    // Only 50 loan supplied, but plenty of collateral.
+    lender_supplies(&env, &s, 50);
+    let borrower = borrower_with_collateral(&env, &s, 10_000);
+
+    let result = m.try_borrow(&borrower, &70_i128, &borrower, &borrower);
+    assert_eq!(result, Err(Ok(MarketError::InsufficientLiquidity)));
+}
+
+#[test]
+fn test_borrow_cap_enforced() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let treasury = Address::generate(&env);
+    let rate_model_id = env.register(MockRateModel, ());
+    let oracle_id = env.register(MockOracle, ());
+    let collateral = env
+        .register_stellar_asset_contract_v2(treasury.clone())
+        .address();
+    let loan = env
+        .register_stellar_asset_contract_v2(treasury.clone())
+        .address();
+
+    MockOracleClient::new(&env, &oracle_id).set_price(&collateral, &WAD);
+    MockOracleClient::new(&env, &oracle_id).set_price(&loan, &(10 * WAD));
+
+    let market_id = env.register(IsolatedMarketContract, ());
+    IsolatedMarketContractClient::new(&env, &market_id).initialize(&IsolatedMarketConfig {
+        collateral_asset: collateral.clone(),
+        loan_asset: loan.clone(),
+        oracle_adapter: oracle_id,
+        lltv: WAD * 80 / 100,
+        liquidation_bonus: WAD * 5 / 100,
+        reserve_factor: WAD / 10,
+        supply_cap: 0,
+        borrow_cap: 400,
+        rate_model: rate_model_id,
+        treasury,
+    });
+    let m = IsolatedMarketContractClient::new(&env, &market_id);
+
+    // Lender supplies 500 loan; borrower posts 10000 collateral ($8000 power).
+    let lender = Address::generate(&env);
+    token::StellarAssetClient::new(&env, &loan).mint(&lender, &500_i128);
+    m.supply(&lender, &500_i128, &lender);
+
+    let borrower = Address::generate(&env);
+    token::StellarAssetClient::new(&env, &collateral).mint(&borrower, &10_000_i128);
+    m.supply_collateral(&borrower, &10_000_i128, &borrower);
+
+    m.borrow(&borrower, &400_i128, &borrower, &borrower);
+    let result = m.try_borrow(&borrower, &1_i128, &borrower, &borrower);
+    assert_eq!(result, Err(Ok(MarketError::BorrowCapExceeded)));
+}
+
+// ---------------------------------------------------------------------------
+// Repay
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_repay_full() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+
+    // Overpay by assets — capped at outstanding debt (70).
+    m.repay(&borrower, &100_i128, &0_i128, &borrower);
+
+    assert_eq!(m.get_user_position(&borrower).unwrap().borrow_shares, 0);
+    assert_eq!(m.get_market_state().unwrap().total_borrow_assets, 0);
+}
+
+#[test]
+fn test_repay_partial() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+
+    m.repay(&borrower, &30_i128, &0_i128, &borrower);
+
+    let shares = m.get_user_position(&borrower).unwrap().borrow_shares;
+    assert!(shares > 0 && shares < 70);
+}
+
+#[test]
+fn test_repay_no_debt_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    let borrower = Address::generate(&env);
+    mint_loan(&env, &s, &borrower, 100);
+    let result = m.try_repay(&borrower, &10_i128, &0_i128, &borrower);
+    assert_eq!(result, Err(Ok(MarketError::InvalidAmount)));
+}
+
+// ---------------------------------------------------------------------------
+// Liquidate
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_liquidate_healthy_position_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+
+    let liquidator = Address::generate(&env);
+    mint_loan(&env, &s, &liquidator, 50);
+    let result = m.try_liquidate(&liquidator, &borrower, &35_i128);
+    assert_eq!(result, Err(Ok(MarketError::HealthFactorOk)));
+}
+
+#[test]
+fn test_liquidate_undercollateralized_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+    let oracle = MockOracleClient::new(&env, &s.oracle_id);
+
+    lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+
+    // Crash collateral $1 → $0.5: power = 1000 × 0.5 × 0.8 = $400; debt = $700.
+    oracle.set_price(&s.collateral, &(WAD / 2));
+
+    let liquidator = Address::generate(&env);
+    mint_loan(&env, &s, &liquidator, 35);
+    m.liquidate(&liquidator, &borrower, &35_i128);
+
+    assert!(token::Client::new(&env, &s.collateral).balance(&liquidator) > 0);
+    let pos = m.get_user_position(&borrower).unwrap();
+    assert!(pos.borrow_shares < 70);
+    assert!(pos.collateral < 1_000);
+}
+
+// ---------------------------------------------------------------------------
+// Interest accrual
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_interest_accrual_grows_totals() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+
+    let before = m.get_market_state().unwrap();
+    assert_eq!(before.total_borrow_assets, 70);
+    assert_eq!(before.total_supply_assets, 1_000);
+
+    // Advance one year at 5% borrow APR.
+    env.ledger().with_mut(|li| li.timestamp = 31_536_000);
+    m.accrue_interest();
+
+    let after = m.get_market_state().unwrap();
+    assert!(after.total_borrow_assets > before.total_borrow_assets);
+    assert!(after.total_supply_assets > before.total_supply_assets);
 }

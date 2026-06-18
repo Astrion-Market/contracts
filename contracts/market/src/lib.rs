@@ -39,7 +39,7 @@ mod types;
 #[cfg(test)]
 mod test;
 
-use astrion_math::{health_factor, wad_mul, WAD};
+use astrion_math::{health_factor, wad_div, wad_mul, WAD};
 use errors::MarketError;
 use soroban_sdk::{
     contract, contractclient, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
@@ -331,6 +331,183 @@ impl IsolatedMarketContract {
         );
         env.events()
             .publish((symbol_short!("wdcol"), on_behalf), assets);
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Borrow / repay (loan asset)
+    // -----------------------------------------------------------------------
+
+    /// Borrow `assets` of the loan asset against `on_behalf`'s collateral,
+    /// sending the assets to `receiver` and minting borrow shares to `on_behalf`.
+    pub fn borrow(
+        env: Env,
+        caller: Address,
+        assets: i128,
+        on_behalf: Address,
+        receiver: Address,
+    ) -> Result<i128, MarketError> {
+        caller.require_auth();
+        Self::guard_live(&env)?;
+        if assets <= 0 {
+            return Err(MarketError::InvalidAmount);
+        }
+        // Operator delegation (caller != on_behalf) arrives in Step 6.
+        if caller != on_behalf {
+            return Err(MarketError::Unauthorized);
+        }
+        Self::accrue_interest_internal(&env)?;
+        let config = Self::config(&env)?;
+        let mut state = Self::state(&env)?;
+        if config.borrow_cap > 0 && state.total_borrow_assets + assets > config.borrow_cap {
+            return Err(MarketError::BorrowCapExceeded);
+        }
+        let available = state.total_supply_assets - state.total_borrow_assets;
+        if assets > available {
+            return Err(MarketError::InsufficientLiquidity);
+        }
+        let shares = to_shares(assets, state.total_borrow_assets, state.total_borrow_shares);
+        if shares <= 0 {
+            return Err(MarketError::InvalidAmount);
+        }
+        let mut position = Self::position_or_empty(&env, &on_behalf);
+        position.borrow_shares += shares;
+        state.total_borrow_shares += shares;
+        state.total_borrow_assets += assets;
+        if Self::health_factor_for_position(&env, &config, &state, &position)? < WAD {
+            return Err(MarketError::HealthFactorTooLow);
+        }
+        Self::set_position(&env, &on_behalf, &position);
+        Self::set_state(&env, &state);
+        token::Client::new(&env, &config.loan_asset).transfer(
+            &env.current_contract_address(),
+            &receiver,
+            &assets,
+        );
+        env.events()
+            .publish((symbol_short!("borrow"), on_behalf), (assets, shares));
+        Ok(shares)
+    }
+
+    /// Repay borrowed loan assets on behalf of `on_behalf`.
+    ///
+    /// Caller specifies exactly one of `assets` or `shares` (the other is 0).
+    /// Repayment is capped at the outstanding debt; `payer` provides the funds.
+    pub fn repay(
+        env: Env,
+        payer: Address,
+        assets: i128,
+        shares: i128,
+        on_behalf: Address,
+    ) -> Result<(i128, i128), MarketError> {
+        payer.require_auth();
+        Self::guard_live(&env)?;
+        Self::accrue_interest_internal(&env)?;
+        let config = Self::config(&env)?;
+        let mut state = Self::state(&env)?;
+        let mut position = Self::position_or_empty(&env, &on_behalf);
+        if position.borrow_shares == 0 {
+            return Err(MarketError::InvalidAmount);
+        }
+
+        let (mut assets, mut shares) = Self::resolve_assets_shares(
+            assets,
+            shares,
+            state.total_borrow_assets,
+            state.total_borrow_shares,
+        )?;
+        // Never repay more than the position owes.
+        if shares > position.borrow_shares {
+            shares = position.borrow_shares;
+            assets = to_assets(shares, state.total_borrow_assets, state.total_borrow_shares);
+        }
+
+        position.borrow_shares -= shares;
+        state.total_borrow_shares -= shares;
+        state.total_borrow_assets -= assets;
+        Self::set_position(&env, &on_behalf, &position);
+        Self::set_state(&env, &state);
+        token::Client::new(&env, &config.loan_asset).transfer(
+            &payer,
+            env.current_contract_address(),
+            &assets,
+        );
+        env.events()
+            .publish((symbol_short!("repay"), on_behalf), (assets, shares));
+        Ok((assets, shares))
+    }
+
+    // -----------------------------------------------------------------------
+    // Liquidation
+    // -----------------------------------------------------------------------
+
+    /// Liquidate an unhealthy position.
+    ///
+    /// Repays up to the close factor (50%) of the borrower's debt and seizes the
+    /// equivalent collateral value plus `liquidation_bonus`. This is the legacy
+    /// close-factor model adapted to the new share accounting; Morpho's
+    /// no-close-factor liquidation with bad-debt socialization is Step 4.
+    pub fn liquidate(
+        env: Env,
+        liquidator: Address,
+        borrower: Address,
+        repay_amount: i128,
+    ) -> Result<(), MarketError> {
+        liquidator.require_auth();
+        Self::guard_live(&env)?;
+        if repay_amount <= 0 {
+            return Err(MarketError::InvalidAmount);
+        }
+        Self::accrue_interest_internal(&env)?;
+        let config = Self::config(&env)?;
+        let mut state = Self::state(&env)?;
+        let mut position = Self::position_or_empty(&env, &borrower);
+        if Self::health_factor_for_position(&env, &config, &state, &position)? >= WAD {
+            return Err(MarketError::HealthFactorOk);
+        }
+        let debt = to_assets(
+            position.borrow_shares,
+            state.total_borrow_assets,
+            state.total_borrow_shares,
+        );
+        let max_repay = wad_mul(debt, WAD / 2);
+        let actual = if repay_amount > max_repay {
+            max_repay
+        } else {
+            repay_amount
+        };
+        let debt_value = wad_mul(actual, Self::price(&env, &config.loan_asset)?);
+        let with_bonus = wad_mul(debt_value, WAD + config.liquidation_bonus);
+        let collateral = wad_div(with_bonus, Self::price(&env, &config.collateral_asset)?);
+        if collateral > position.collateral {
+            return Err(MarketError::InsufficientCollateral);
+        }
+        let mut repaid_shares =
+            to_shares(actual, state.total_borrow_assets, state.total_borrow_shares);
+        if repaid_shares > position.borrow_shares {
+            repaid_shares = position.borrow_shares;
+        }
+        position.borrow_shares -= repaid_shares;
+        position.collateral -= collateral;
+        state.total_borrow_shares -= repaid_shares;
+        state.total_borrow_assets -= actual;
+        state.total_collateral -= collateral;
+        Self::set_position(&env, &borrower, &position);
+        Self::set_state(&env, &state);
+        token::Client::new(&env, &config.loan_asset).transfer(
+            &liquidator,
+            env.current_contract_address(),
+            &actual,
+        );
+        token::Client::new(&env, &config.collateral_asset).transfer(
+            &env.current_contract_address(),
+            &liquidator,
+            &collateral,
+        );
+        env.events().publish(
+            (symbol_short!("liq"), liquidator, borrower),
+            (actual, collateral),
+        );
         Ok(())
     }
 
