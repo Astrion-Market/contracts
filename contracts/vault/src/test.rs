@@ -3,12 +3,74 @@
 extern crate std;
 
 use soroban_sdk::{
-    symbol_short,
+    contract, contractimpl, contracttype, symbol_short,
     testutils::{Address as _, Ledger},
-    token, Address, BytesN, Env, String,
+    token, vec, Address, Bytes, BytesN, Env, String, Symbol,
 };
 
+use crate::types::AdapterChange;
 use crate::{VaultContract, VaultContractClient};
+
+#[contracttype]
+#[derive(Clone)]
+enum MockAdapterKey {
+    Asset,
+}
+
+#[contract]
+struct MockAdapter;
+
+#[contractimpl]
+impl MockAdapter {
+    pub fn initialize(env: Env, asset: Address) {
+        env.storage().instance().set(&MockAdapterKey::Asset, &asset);
+    }
+
+    pub fn allocate(
+        env: Env,
+        data: Bytes,
+        assets: i128,
+        _selector: Symbol,
+        _sender: Address,
+    ) -> AdapterChange {
+        AdapterChange {
+            ids: vec![&env, env.crypto().sha256(&data).to_bytes()],
+            change: assets,
+        }
+    }
+
+    pub fn deallocate(
+        env: Env,
+        data: Bytes,
+        assets: i128,
+        _selector: Symbol,
+        sender: Address,
+    ) -> AdapterChange {
+        let asset: Address = env
+            .storage()
+            .instance()
+            .get(&MockAdapterKey::Asset)
+            .unwrap();
+        token::Client::new(&env, &asset).transfer(
+            &env.current_contract_address(),
+            &sender,
+            &assets,
+        );
+        AdapterChange {
+            ids: vec![&env, env.crypto().sha256(&data).to_bytes()],
+            change: -assets,
+        }
+    }
+
+    pub fn real_assets(env: Env) -> i128 {
+        let asset: Address = env
+            .storage()
+            .instance()
+            .get(&MockAdapterKey::Asset)
+            .unwrap();
+        token::Client::new(&env, &asset).balance(&env.current_contract_address())
+    }
+}
 
 struct Setup<'a> {
     env: Env,
@@ -48,6 +110,27 @@ fn mint_asset(env: &Env, asset: &Address, to: &Address, amount: i128) {
 
 fn hash(env: &Env, byte: u8) -> BytesN<32> {
     BytesN::from_array(env, &[byte; 32])
+}
+
+fn enable_allocator(s: &Setup, account: &Address) {
+    let action = symbol_short!("alloc");
+    let args_hash = s.client.hash_allocator_args(account, &true);
+    s.client.submit(&s.owner, &action, &args_hash);
+    s.client.set_allocator(account, &true);
+}
+
+fn enable_adapter(s: &Setup, adapter: &Address) {
+    let action = symbol_short!("adapter");
+    let args_hash = s.client.hash_adapter_args(adapter, &true);
+    s.client.submit(&s.owner, &action, &args_hash);
+    s.client.set_adapter(adapter, &true);
+}
+
+fn set_cap(s: &Setup, id: &BytesN<32>, absolute_cap: i128, relative_cap: i128) {
+    let action = symbol_short!("caps");
+    let args_hash = s.client.hash_cap_args(id, &absolute_cap, &relative_cap);
+    s.client.submit(&s.owner, &action, &args_hash);
+    s.client.set_caps(id, &absolute_cap, &relative_cap);
 }
 
 #[test]
@@ -297,4 +380,39 @@ fn test_convert_zero_returns_zero() {
 
     assert_eq!(s.client.convert_to_shares(&0), 0);
     assert_eq!(s.client.convert_to_assets(&0), 0);
+}
+
+#[test]
+fn test_allocate_enforces_caps_and_deallocate_updates_allocation() {
+    let s = setup();
+    let allocator = Address::generate(&s.env);
+    let user = Address::generate(&s.env);
+    let adapter = s.env.register(MockAdapter, ());
+    let adapter_client = MockAdapterClient::new(&s.env, &adapter);
+    adapter_client.initialize(&s.asset);
+    let data = Bytes::from_array(&s.env, &[1, 2, 3, 4]);
+    let id = s.env.crypto().sha256(&data).to_bytes();
+
+    enable_allocator(&s, &allocator);
+    enable_adapter(&s, &adapter);
+    set_cap(&s, &id, 500, 0);
+
+    mint_asset(&s.env, &s.asset, &user, 1_000);
+    s.client.deposit(&user, &1_000, &user);
+    s.client
+        .allocate(&allocator, &adapter, &data, &400, &symbol_short!("supply"));
+
+    assert_eq!(s.client.allocation(&id), 400);
+    assert_eq!(token::Client::new(&s.env, &s.asset).balance(&adapter), 400);
+
+    let too_much =
+        s.client
+            .try_allocate(&allocator, &adapter, &data, &200, &symbol_short!("supply"));
+    assert_eq!(too_much, Err(Ok(crate::errors::VaultError::CapExceeded)));
+    assert_eq!(s.client.allocation(&id), 400);
+
+    s.client
+        .deallocate(&allocator, &adapter, &data, &150, &symbol_short!("withdr"));
+    assert_eq!(s.client.allocation(&id), 250);
+    assert_eq!(token::Client::new(&s.env, &s.asset).balance(&adapter), 250);
 }

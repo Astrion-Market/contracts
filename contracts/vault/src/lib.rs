@@ -11,8 +11,8 @@ mod test;
 use astrion_math::{mul_div_down, mul_div_up};
 use errors::VaultError;
 use soroban_sdk::{
-    contract, contractimpl, symbol_short, token, xdr::ToXdr, Address, Bytes, BytesN, Env, String,
-    Symbol,
+    contract, contractclient, contractimpl, symbol_short, token, xdr::ToXdr, Address, Bytes,
+    BytesN, Env, String, Symbol,
 };
 use storage::{
     adapters as read_adapters, allowance as read_allowance, balance as read_balance,
@@ -27,7 +27,26 @@ use storage::{
     set_pending, set_sentinel as write_sentinel, set_state as write_state,
     set_timelock as write_timelock, timelock as read_timelock,
 };
-use types::{AccrualPreview, GateConfig, VaultConfig, VaultState};
+use types::{AccrualPreview, AdapterChange, GateConfig, VaultConfig, VaultState};
+
+#[contractclient(name = "AdapterClient")]
+pub trait Adapter {
+    fn allocate(
+        env: Env,
+        data: Bytes,
+        assets: i128,
+        selector: Symbol,
+        sender: Address,
+    ) -> AdapterChange;
+    fn deallocate(
+        env: Env,
+        data: Bytes,
+        assets: i128,
+        selector: Symbol,
+        sender: Address,
+    ) -> AdapterChange;
+    fn real_assets(env: Env) -> i128;
+}
 
 #[contract]
 pub struct VaultContract;
@@ -529,6 +548,57 @@ impl VaultContract {
         result
     }
 
+    pub fn allocate(
+        env: Env,
+        caller: Address,
+        adapter: Address,
+        data: Bytes,
+        assets: i128,
+        selector: Symbol,
+    ) -> Result<(), VaultError> {
+        caller.require_auth();
+        if !read_is_allocator(&env, &caller) {
+            return Err(VaultError::Unauthorized);
+        }
+        Self::enter(&env)?;
+        let result = Self::allocate_internal(&env, &adapter, &data, assets, &selector);
+        Self::exit(&env);
+        result
+    }
+
+    pub fn deallocate(
+        env: Env,
+        caller: Address,
+        adapter: Address,
+        data: Bytes,
+        assets: i128,
+        selector: Symbol,
+    ) -> Result<(), VaultError> {
+        caller.require_auth();
+        if !read_is_allocator(&env, &caller) {
+            return Err(VaultError::Unauthorized);
+        }
+        Self::enter(&env)?;
+        let result = Self::deallocate_internal(&env, &adapter, &data, assets, &selector);
+        Self::exit(&env);
+        result
+    }
+
+    pub fn force_deallocate(
+        env: Env,
+        caller: Address,
+        adapter: Address,
+        data: Bytes,
+        assets: i128,
+        selector: Symbol,
+    ) -> Result<(), VaultError> {
+        caller.require_auth();
+        Self::enter(&env)?;
+        let result = Self::deallocate_internal(&env, &adapter, &data, assets, &selector);
+        Self::exit(&env);
+        result
+    }
+
     pub fn accrue_interest(env: Env) -> Result<(), VaultError> {
         Self::accrue_interest_internal(&env)
     }
@@ -757,6 +827,116 @@ impl VaultContract {
         Ok(assets)
     }
 
+    fn allocate_internal(
+        env: &Env,
+        adapter: &Address,
+        data: &Bytes,
+        assets: i128,
+        selector: &Symbol,
+    ) -> Result<(), VaultError> {
+        if assets <= 0 {
+            return Err(VaultError::InvalidAmount);
+        }
+        if !read_is_adapter(env, adapter) {
+            return Err(VaultError::AdapterNotEnabled);
+        }
+        Self::accrue_interest_internal(env)?;
+        let config = read_config(env).ok_or(VaultError::NotInitialized)?;
+        let state = read_state(env).ok_or(VaultError::NotInitialized)?;
+        let first_total_assets = state.total_assets;
+        let idle = token::Client::new(env, &config.asset).balance(&env.current_contract_address());
+        if assets > idle {
+            return Err(VaultError::InsufficientLiquidity);
+        }
+
+        token::Client::new(env, &config.asset).transfer(
+            &env.current_contract_address(),
+            adapter,
+            &assets,
+        );
+        let change = AdapterClient::new(env, adapter).allocate(
+            data,
+            &assets,
+            selector,
+            &env.current_contract_address(),
+        );
+        if change.change <= 0 {
+            return Err(VaultError::InvalidAmount);
+        }
+        Self::apply_adapter_change(env, &change, first_total_assets)?;
+        env.events()
+            .publish((symbol_short!("allocate"), adapter.clone()), assets);
+        Ok(())
+    }
+
+    fn deallocate_internal(
+        env: &Env,
+        adapter: &Address,
+        data: &Bytes,
+        assets: i128,
+        selector: &Symbol,
+    ) -> Result<(), VaultError> {
+        if assets <= 0 {
+            return Err(VaultError::InvalidAmount);
+        }
+        if !read_is_adapter(env, adapter) {
+            return Err(VaultError::AdapterNotEnabled);
+        }
+        Self::accrue_interest_internal(env)?;
+        let state = read_state(env).ok_or(VaultError::NotInitialized)?;
+        let first_total_assets = state.total_assets;
+        let change = AdapterClient::new(env, adapter).deallocate(
+            data,
+            &assets,
+            selector,
+            &env.current_contract_address(),
+        );
+        if change.change >= 0 {
+            return Err(VaultError::InvalidAmount);
+        }
+        Self::apply_adapter_change(env, &change, first_total_assets)?;
+        env.events()
+            .publish((symbol_short!("dealloc"), adapter.clone()), assets);
+        Ok(())
+    }
+
+    fn apply_adapter_change(
+        env: &Env,
+        change: &AdapterChange,
+        first_total_assets: i128,
+    ) -> Result<(), VaultError> {
+        for id in change.ids.iter() {
+            let mut caps = read_caps(env, &id);
+            let next = caps.allocation + change.change;
+            if next < 0 {
+                return Err(VaultError::InvalidAmount);
+            }
+            if change.change > 0 {
+                Self::check_caps(&caps, next, first_total_assets)?;
+            }
+            caps.allocation = next;
+            write_caps(env, &id, &caps);
+        }
+        Ok(())
+    }
+
+    fn check_caps(
+        caps: &types::Caps,
+        next_allocation: i128,
+        first_total_assets: i128,
+    ) -> Result<(), VaultError> {
+        if caps.absolute_cap > 0 && next_allocation > caps.absolute_cap {
+            return Err(VaultError::CapExceeded);
+        }
+        if caps.relative_cap > 0 {
+            let relative_cap = first_total_assets * caps.relative_cap / astrion_math::WAD;
+            if next_allocation > relative_cap {
+                return Err(VaultError::CapExceeded);
+            }
+        }
+        Ok(())
+    }
+
     fn mint_shares(env: &Env, receiver: &Address, shares: i128, state: &mut VaultState) {
         let balance = read_balance(env, receiver);
         write_balance(env, receiver, balance + shares);
@@ -843,8 +1023,11 @@ impl VaultContract {
             });
         }
         let elapsed = (now - state.last_update_timestamp) as i128;
-        let real_assets =
+        let mut real_assets =
             token::Client::new(env, &config.asset).balance(&env.current_contract_address());
+        for adapter in read_adapters(env).iter() {
+            real_assets += AdapterClient::new(env, &adapter).real_assets();
+        }
         let max_gain = state.total_assets * config.max_rate * elapsed / astrion_math::WAD;
         let max_total = state.total_assets + max_gain;
         let new_total_assets = if real_assets < max_total {
