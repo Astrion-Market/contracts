@@ -2,19 +2,15 @@
 resolver = "2"
 members = [
   "contracts/*",
-  "libs/types",
-  "libs/math",
-  "libs/keys",
-  "libs/market_utils",
-  "libs/position_utils",
-  "libs/pricing_utils",
-  "libs/swap_utils",
-  "libs/increase_position_utils",
-  "libs/decrease_position_utils",
+  "libs/*",
 ]
 
 [workspace.dependencies]
-soroban-sdk = "25.3.1"
+soroban-sdk    = "25"
+astrion-math   = { path = "libs/math" }
+stellar-tokens = "0.7.1"
+stellar-access = "0.7.1"
+stellar-macros = "0.7.1"
 
 [profile.release]
 opt-level = "z"

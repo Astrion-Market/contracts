@@ -1,0 +1,112 @@
+name: CD — Testnet
+
+# Automatically deploys to testnet on every push to main.
+# Requires the following GitHub Secrets (repo Settings → Secrets → Actions):
+#   TESTNET_DEPLOYER_SECRET  — Stellar secret key (S...) for the deployer wallet
+#   TESTNET_ADMIN_ADDRESS    — Admin public key (G...)
+#   TESTNET_TREASURY_ADDRESS — Treasury public key (G...)
+#   TESTNET_ORACLE_ID        — SEP-0402 oracle contract address (C...)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # allow manual trigger
+
+concurrency:
+  group: cd-testnet
+  cancel-in-progress: false   # never cancel a running deploy
+
+jobs:
+  # ─── gate: all tests must pass before any deploy ──────────────────────────
+  test:
+    name: CI gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace
+
+  # ─── deploy to testnet ────────────────────────────────────────────────────
+  deploy:
+    name: Deploy → testnet
+    needs: test
+    runs-on: ubuntu-latest
+    environment: testnet
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Install a pinned version of stellar-cli for reproducibility.
+      - name: Install stellar-cli
+        run: |
+          STELLAR_CLI_VERSION="21.4.1"
+          curl -sSL \
+            "https://github.com/stellar/stellar-cli/releases/download/v${STELLAR_CLI_VERSION}/stellar-cli-Linux-x86_64.tar.gz" \
+            | tar xz -C /usr/local/bin stellar
+          stellar version
+
+      # Add jq (needed by state.sh)
+      - name: Install jq
+        run: sudo apt-get install -y --no-install-recommends jq
+
+      # Register the deployer key from secrets — never echoed to logs.
+      - name: Configure deployer key
+        run: |
+          stellar keys add deployer \
+            --secret-key "${{ secrets.TESTNET_DEPLOYER_SECRET }}" \
+            --network testnet
+
+      # Write config.env from GitHub Secrets.
+      - name: Write testnet config
+        run: |
+          mkdir -p deployments/testnet
+          cat > deployments/testnet/config.env <<'ENVEOF'
+          ADMIN_ADDRESS=${{ secrets.TESTNET_ADMIN_ADDRESS }}
+          TREASURY_ADDRESS=${{ secrets.TESTNET_TREASURY_ADDRESS }}
+          DEFAULT_ORACLE_ID=${{ secrets.TESTNET_ORACLE_ID }}
+          DEFAULT_MAX_STALENESS=300
+          BASE_RATE=10000000000000000
+          SLOPE1=40000000000000000
+          SLOPE2=750000000000000000
+          OPTIMAL_UTILIZATION=800000000000000000
+          RESERVE_FACTOR=100000000000000000
+          CLOSE_FACTOR=500000000000000000
+          ENVEOF
+
+      - name: Deploy contracts
+        run: make deploy-all NETWORK=testnet SOURCE=deployer
+
+      - name: Initialize contracts
+        run: make init-all NETWORK=testnet SOURCE=deployer
+
+      - name: Verify deployment
+        run: make verify NETWORK=testnet SOURCE=deployer
+
+      # Upload all deployment artefacts (addresses, state, checksums, report)
+      # for traceability — one artefact per commit SHA.
+      - name: Upload deployment artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testnet-deployment-${{ github.sha }}
+          path: deployments/testnet/
+          retention-days: 90

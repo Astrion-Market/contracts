@@ -1,0 +1,157 @@
+name: CD — Mainnet
+
+# Manual-only mainnet deployment with a required human-approval gate.
+#
+# Protection layers:
+#   1. Triggered only via workflow_dispatch (never auto-triggered)
+#   2. Operator must type "DEPLOY" to confirm intent
+#   3. GitHub Environment "mainnet" enforces required reviewers
+#      (configure at: Settings → Environments → mainnet → Required reviewers)
+#   4. All CI checks re-run before touching the network
+#   5. Deployment artefacts archived with 365-day retention
+#
+# Required GitHub Secrets (repo Settings → Secrets → Actions, environment: mainnet):
+#   MAINNET_DEPLOYER_SECRET  — Stellar secret key (S...) for the deployer wallet
+#   MAINNET_ADMIN_ADDRESS    — Admin public key (G...) — should be a multisig
+#   MAINNET_TREASURY_ADDRESS — Treasury public key (G...)
+#   MAINNET_ORACLE_ID        — Audited SEP-0402 oracle contract address (C...)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DEPLOY to confirm mainnet deployment'
+        required: true
+        type: string
+      notes:
+        description: 'Deployment notes (optional, included in artefact)'
+        required: false
+        type: string
+
+concurrency:
+  group: cd-mainnet
+  cancel-in-progress: false   # never cancel a running mainnet deploy
+
+jobs:
+  # ─── guard: reject if confirmation string is wrong ────────────────────────
+  confirm-intent:
+    name: Confirm intent
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check confirmation
+        if: ${{ github.event.inputs.confirm != 'DEPLOY' }}
+        run: |
+          echo "::error::Mainnet deployment requires typing 'DEPLOY' in the confirm field."
+          exit 1
+      - run: echo "Confirmation accepted. Proceeding to CI gate."
+
+  # ─── gate: full CI before any mainnet action ──────────────────────────────
+  test:
+    name: CI gate
+    needs: confirm-intent
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace
+
+      - name: Build WASM
+        run: cargo build --workspace --target wasm32v1-none --release
+
+  # ─── mainnet deploy — requires human approval on the "mainnet" environment ─
+  deploy:
+    name: Deploy → mainnet
+    needs: test
+    runs-on: ubuntu-latest
+    environment: mainnet   # ← enforces required reviewer approval
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install stellar-cli
+        run: |
+          STELLAR_CLI_VERSION="21.4.1"
+          curl -sSL \
+            "https://github.com/stellar/stellar-cli/releases/download/v${STELLAR_CLI_VERSION}/stellar-cli-Linux-x86_64.tar.gz" \
+            | tar xz -C /usr/local/bin stellar
+          stellar version
+
+      - name: Install jq
+        run: sudo apt-get install -y --no-install-recommends jq
+
+      - name: Configure deployer key
+        run: |
+          stellar keys add deployer \
+            --secret-key "${{ secrets.MAINNET_DEPLOYER_SECRET }}" \
+            --network mainnet
+
+      - name: Write mainnet config
+        run: |
+          mkdir -p deployments/mainnet
+          cat > deployments/mainnet/config.env <<'ENVEOF'
+          ADMIN_ADDRESS=${{ secrets.MAINNET_ADMIN_ADDRESS }}
+          TREASURY_ADDRESS=${{ secrets.MAINNET_TREASURY_ADDRESS }}
+          DEFAULT_ORACLE_ID=${{ secrets.MAINNET_ORACLE_ID }}
+          DEFAULT_MAX_STALENESS=120
+          BASE_RATE=10000000000000000
+          SLOPE1=40000000000000000
+          SLOPE2=750000000000000000
+          OPTIMAL_UTILIZATION=800000000000000000
+          RESERVE_FACTOR=100000000000000000
+          CLOSE_FACTOR=500000000000000000
+          ENVEOF
+
+      - name: Write deployment notes
+        if: ${{ github.event.inputs.notes != '' }}
+        run: |
+          mkdir -p deployments/mainnet
+          echo "${{ github.event.inputs.notes }}" > deployments/mainnet/deployment-notes.txt
+
+      - name: Deploy contracts
+        run: make deploy-all NETWORK=mainnet SOURCE=deployer
+
+      - name: Initialize contracts
+        run: make init-all NETWORK=mainnet SOURCE=deployer
+
+      - name: Verify deployment
+        run: make verify NETWORK=mainnet SOURCE=deployer
+
+      # Archive everything — auditors and post-mortems will need this.
+      - name: Upload deployment artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mainnet-deployment-${{ github.sha }}
+          path: deployments/mainnet/
+          retention-days: 365
+
+      - name: Deployment summary
+        run: |
+          echo "## Mainnet Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Triggered by | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Date | $(date -u) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Download artefacts: \`mainnet-deployment-${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY

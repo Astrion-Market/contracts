@@ -3,28 +3,6 @@
 version = 4
 
 [[package]]
-name = "adl-handler"
-version = "0.1.0"
-dependencies = [
- "data-store",
- "deposit-handler",
- "deposit-vault",
- "gmx-decrease-position-utils",
- "gmx-keys",
- "gmx-market-utils",
- "gmx-math",
- "gmx-position-utils",
- "gmx-pricing-utils",
- "gmx-types",
- "market-token",
- "oracle",
- "order-handler",
- "order-vault",
- "role-store",
- "soroban-sdk",
-]
-
-[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -184,6 +162,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "astrion-math"
+version = "0.1.0"
+
+[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -299,6 +281,14 @@ name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+
+[[package]]
+name = "core-pool"
+version = "0.1.0"
+dependencies = [
+ "astrion-math",
+ "soroban-sdk",
+]
 
 [[package]]
 name = "cpufeatures"
@@ -459,44 +449,6 @@ name = "data-encoding"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
-
-[[package]]
-name = "data-store"
-version = "0.1.0"
-dependencies = [
- "gmx-keys",
- "gmx-math",
- "gmx-types",
- "role-store",
- "soroban-sdk",
-]
-
-[[package]]
-name = "deposit-handler"
-version = "0.1.0"
-dependencies = [
- "data-store",
- "deposit-vault",
- "gmx-keys",
- "gmx-market-utils",
- "gmx-math",
- "gmx-types",
- "market-factory",
- "market-token",
- "oracle",
- "role-store",
- "soroban-sdk",
- "withdrawal-vault",
-]
-
-[[package]]
-name = "deposit-vault"
-version = "0.1.0"
-dependencies = [
- "gmx-keys",
- "role-store",
- "soroban-sdk",
-]
 
 [[package]]
 name = "der"
@@ -660,40 +612,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 
 [[package]]
-name = "exchange-router"
-version = "0.1.0"
-dependencies = [
- "data-store",
- "deposit-handler",
- "deposit-vault",
- "gmx-keys",
- "gmx-math",
- "gmx-types",
- "liquidation-handler",
- "market-token",
- "oracle",
- "order-handler",
- "order-vault",
- "role-store",
- "soroban-sdk",
- "withdrawal-handler",
- "withdrawal-vault",
-]
-
-[[package]]
-name = "fee-handler"
-version = "0.1.0"
-dependencies = [
- "data-store",
- "gmx-keys",
- "gmx-math",
- "gmx-types",
- "market-token",
- "role-store",
- "soroban-sdk",
-]
-
-[[package]]
 name = "ff"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -770,114 +688,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gmx-decrease-position-utils"
-version = "0.1.0"
-dependencies = [
- "data-store",
- "gmx-keys",
- "gmx-market-utils",
- "gmx-math",
- "gmx-position-utils",
- "gmx-pricing-utils",
- "gmx-swap-utils",
- "gmx-types",
- "market-token",
- "oracle",
- "role-store",
- "soroban-sdk",
-]
-
-[[package]]
-name = "gmx-increase-position-utils"
-version = "0.1.0"
-dependencies = [
- "data-store",
- "gmx-keys",
- "gmx-market-utils",
- "gmx-math",
- "gmx-position-utils",
- "gmx-pricing-utils",
- "gmx-types",
- "market-token",
- "oracle",
- "order-vault",
- "role-store",
- "soroban-sdk",
-]
-
-[[package]]
-name = "gmx-keys"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
-name = "gmx-market-utils"
-version = "0.1.0"
-dependencies = [
- "data-store",
- "gmx-keys",
- "gmx-math",
- "gmx-types",
- "role-store",
- "soroban-sdk",
-]
-
-[[package]]
-name = "gmx-math"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
-name = "gmx-position-utils"
-version = "0.1.0"
-dependencies = [
- "data-store",
- "gmx-keys",
- "gmx-market-utils",
- "gmx-math",
- "gmx-types",
- "role-store",
- "soroban-sdk",
-]
-
-[[package]]
-name = "gmx-pricing-utils"
-version = "0.1.0"
-dependencies = [
- "data-store",
- "gmx-keys",
- "gmx-market-utils",
- "gmx-math",
- "gmx-types",
- "role-store",
- "soroban-sdk",
-]
-
-[[package]]
-name = "gmx-swap-utils"
-version = "0.1.0"
-dependencies = [
- "gmx-keys",
- "gmx-market-utils",
- "gmx-math",
- "gmx-pricing-utils",
- "gmx-types",
- "soroban-sdk",
-]
-
-[[package]]
-name = "gmx-types"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
- "soroban-token-sdk",
-]
-
-[[package]]
 name = "group"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -933,6 +743,13 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
+name = "hello-world"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+]
 
 [[package]]
 name = "hex"
@@ -1018,6 +835,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e04e2fd2b8188ea827b32ef11de88377086d690286ab35747ef7f9bf3ccb590"
 
 [[package]]
+name = "interest-rate-model"
+version = "0.1.0"
+dependencies = [
+ "astrion-math",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1078,22 +903,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
-name = "liquidation-handler"
+name = "liquidation-engine"
 version = "0.1.0"
 dependencies = [
- "data-store",
- "gmx-decrease-position-utils",
- "gmx-keys",
- "gmx-market-utils",
- "gmx-math",
- "gmx-position-utils",
- "gmx-pricing-utils",
- "gmx-types",
- "market-token",
- "oracle",
- "order-handler",
- "order-vault",
- "role-store",
+ "astrion-math",
  "soroban-sdk",
 ]
 
@@ -1115,25 +928,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "market-factory"
+name = "market"
 version = "0.1.0"
 dependencies = [
- "data-store",
- "gmx-keys",
- "gmx-math",
- "gmx-types",
- "market-token",
- "role-store",
+ "astrion-math",
  "soroban-sdk",
 ]
 
 [[package]]
-name = "market-token"
+name = "market-factory"
 version = "0.1.0"
 dependencies = [
- "data-store",
- "gmx-keys",
- "role-store",
  "soroban-sdk",
 ]
 
@@ -1142,6 +947,13 @@ name = "memchr"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
+
+[[package]]
+name = "mock-oracle"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
 
 [[package]]
 name = "num-bigint"
@@ -1195,46 +1007,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
-name = "oracle"
+name = "oracle-adapter"
 version = "0.1.0"
 dependencies = [
- "data-store",
- "gmx-keys",
- "gmx-types",
- "role-store",
- "soroban-sdk",
-]
-
-[[package]]
-name = "order-handler"
-version = "0.1.0"
-dependencies = [
- "data-store",
- "deposit-handler",
- "deposit-vault",
- "gmx-decrease-position-utils",
- "gmx-increase-position-utils",
- "gmx-keys",
- "gmx-market-utils",
- "gmx-math",
- "gmx-position-utils",
- "gmx-pricing-utils",
- "gmx-swap-utils",
- "gmx-types",
- "market-factory",
- "market-token",
- "oracle",
- "order-vault",
- "role-store",
- "soroban-sdk",
-]
-
-[[package]]
-name = "order-vault"
-version = "0.1.0"
-dependencies = [
- "gmx-keys",
- "role-store",
+ "astrion-math",
  "soroban-sdk",
 ]
 
@@ -1355,19 +1131,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "reader"
-version = "0.1.0"
-dependencies = [
- "gmx-keys",
- "gmx-market-utils",
- "gmx-math",
- "gmx-position-utils",
- "gmx-pricing-utils",
- "gmx-types",
- "soroban-sdk",
-]
-
-[[package]]
 name = "ref-cast"
 version = "1.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1388,14 +1151,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "referral-storage"
-version = "0.1.0"
-dependencies = [
- "gmx-keys",
- "soroban-sdk",
-]
-
-[[package]]
 name = "rfc6979"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1403,16 +1158,6 @@ checksum = "f8dd2a808d456c4a54e300a23e9f5a67e122c3024119acbfd73e3bf664491cb2"
 dependencies = [
  "hmac",
  "subtle",
-]
-
-[[package]]
-name = "role-store"
-version = "0.1.0"
-dependencies = [
- "gmx-keys",
- "gmx-math",
- "gmx-types",
- "soroban-sdk",
 ]
 
 [[package]]
@@ -1790,15 +1535,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "soroban-token-sdk"
-version = "25.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8230fe7cf1bf138068cbe5cfa54a76657bed8a9bb6a89a4a229383116d3f067"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
 name = "soroban-wasmi"
 version = "0.31.1-soroban.20.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1840,6 +1576,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
+name = "stellar-access"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ec08d321dff797b611228fea28527311f2f03721cb264433490f711d5afd1d6"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
+name = "stellar-contract-utils"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acd8001a84e189032af6d8d17355a923d98ea97917064d6e6003ff3e5accb0f5"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
+name = "stellar-governance"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "783d933cb0ff013020315cc37272d6cf1361b8fe4f5e97407e2a716f51a3e5bb"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
+name = "stellar-macros"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad14d3698274547aa5a61874c986855c549231f95b39c0de03b0bd96b6bcac9f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "stellar-strkey"
 version = "0.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1858,6 +1632,17 @@ dependencies = [
  "crate-git-revision",
  "data-encoding",
  "heapless",
+]
+
+[[package]]
+name = "stellar-tokens"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "324600b7c2f7bfbc3bda9b793ea097155108ce8b36e2d27052c933367aafdc54"
+dependencies = [
+ "soroban-sdk",
+ "stellar-contract-utils",
+ "stellar-governance",
 ]
 
 [[package]]
@@ -1914,18 +1699,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "test-faucet"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
- "test-token",
-]
-
-[[package]]
 name = "test-token"
 version = "0.1.0"
 dependencies = [
  "soroban-sdk",
+ "stellar-access",
+ "stellar-macros",
+ "stellar-tokens",
 ]
 
 [[package]]
@@ -2168,33 +1948,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7837d08f69c77cf6b07689544538e017c1bfcf57e34b4c0ff58e6c2cd3b37091"
 dependencies = [
  "windows-link",
-]
-
-[[package]]
-name = "withdrawal-handler"
-version = "0.1.0"
-dependencies = [
- "data-store",
- "deposit-handler",
- "deposit-vault",
- "gmx-keys",
- "gmx-market-utils",
- "gmx-math",
- "gmx-types",
- "market-token",
- "oracle",
- "role-store",
- "soroban-sdk",
- "withdrawal-vault",
-]
-
-[[package]]
-name = "withdrawal-vault"
-version = "0.1.0"
-dependencies = [
- "gmx-keys",
- "role-store",
- "soroban-sdk",
 ]
 
 [[package]]

@@ -1,0 +1,78 @@
+{
+  "network": "testnet",
+  "deployer": "deployer",
+  "created_at": "2026-05-24T18:57:34Z",
+  "updated_at": "2026-05-25T23:36:46Z",
+  "contracts": {
+    "oracle-adapter": {
+      "contract_id": "CCVODOMSC3YBNTXDWRVKFFTSGLBYWZYGZ2N7WCL36WUGJVZVRH5Q5E2E",
+      "wasm_sha256": "7dfac9328d30438d5e47064920d2a92474ef588f9fb46627b8c2d5454f544c36",
+      "wasm_file": "oracle_adapter.wasm",
+      "status": "initialized",
+      "deployed_at": "2026-05-24T19:00:33Z",
+      "initialized_at": "2026-05-25T12:07:04Z"
+    },
+    "rate-model": {
+      "contract_id": "CBHR3TTEVYHOTYCS2E3U2WOCLHEA25R2GOFCLMI6F5VT6A4OZ3NMRCF4",
+      "wasm_sha256": "cb80e2f80a451e37f829cb687d9e624fb4419fc35d13f10733b95aad0391df7b",
+      "wasm_file": "interest_rate_model.wasm",
+      "status": "initialized",
+      "deployed_at": "2026-05-24T19:00:42Z",
+      "initialized_at": "2026-05-25T12:10:12Z"
+    },
+    "core-pool": {
+      "contract_id": "CCOHNWEPMIBPNI2B43NQYVGHVN3344FZKOALBN77HSV2BRR3VYYY3TST",
+      "wasm_sha256": "ab10f2933b037ae20279a8d493aa769e4b5bff28d0a9fc36a0e61081c48901fa",
+      "wasm_file": "core_pool.wasm",
+      "status": "initialized",
+      "deployed_at": "2026-05-24T19:00:52Z",
+      "initialized_at": "2026-05-25T12:10:25Z"
+    },
+    "liquidation-engine": {
+      "contract_id": "CCOBO7ABVY4XL2JNUXQH5EPQYIOOKAKQV656Z6URT5U3PD3AGKXIW7TB",
+      "wasm_sha256": "5f58c03a5fb7bcbd3aa1691e52cf311c742f73a53d6050ebb347c3129bca4da2",
+      "wasm_file": "liquidation_engine.wasm",
+      "status": "initialized",
+      "deployed_at": "2026-05-24T19:01:03Z",
+      "initialized_at": "2026-05-25T12:11:05Z"
+    },
+    "market": {
+      "contract_id": "CBC5C6IY2OB3QRB2K6OUW7UVVVAIIDHEU75BQIXYNTTT632MXNLOPMVP",
+      "wasm_sha256": "55cdddee5d3a97c96671051ecde809494e8fb63ec0f1de7e92ed564c35ff9627",
+      "wasm_file": "market.wasm",
+      "status": "deployed",
+      "deployed_at": "2026-05-25T10:52:39Z"
+    },
+    "market-factory": {
+      "contract_id": "CBMMHD3EFPLI7PAQJGSR2S5ZM6ZTDTRVZMXBEBEWK3TJN5G5QHWUGWLN",
+      "wasm_sha256": "a669a6a582828999f7c73061a5127ebebdbde0d7f8fe988c646ddd66cf6d239e",
+      "wasm_file": "market_factory.wasm",
+      "status": "initialized",
+      "deployed_at": "2026-05-25T10:52:39Z",
+      "market_wasm_hash": "55cdddee5d3a97c96671051ecde809494e8fb63ec0f1de7e92ed564c35ff9627",
+      "initialized_at": "2026-05-25T12:11:16Z"
+    },
+    "test-usdc": {
+      "contract_id": "CCMO7GBSI5NNSU4DGTW4X2G6EEVIECQABIGKIUR55YRJ4VVMYN2ODSYL",
+      "wasm_sha256": "aabdb4affb2898fe97b8829336ae8df85e041b22d75ff2811f1e3e9f774429be",
+      "wasm_file": "test_token.wasm",
+      "status": "initialized",
+      "deployed_at": "2026-05-25T17:52:20Z"
+    },
+    "test-wbtc": {
+      "contract_id": "CANNEKQWI5GAEVBDTWNSVSA3SZLI4QHVF3SD3KRU4QX7YKAIUBTVJ4IS",
+      "wasm_sha256": "aabdb4affb2898fe97b8829336ae8df85e041b22d75ff2811f1e3e9f774429be",
+      "wasm_file": "test_token.wasm",
+      "status": "initialized",
+      "deployed_at": "2026-05-25T17:52:32Z"
+    },
+    "mock-oracle": {
+      "contract_id": "CCSGR2PW5LLTW6MHSPCFRFTNF5UUKGCXSN5DDK6UPF5PVJHPRIWVQHMW",
+      "wasm_sha256": "05d85051f158c7c2d31a0703688d6d74de1c104af1892f8eff43fd793d388378",
+      "wasm_file": "mock_oracle.wasm",
+      "status": "initialized",
+      "deployed_at": "2026-05-25T23:31:35Z",
+      "initialized_at": "2026-05-25T23:36:46Z"
+    }
+  }
+}
