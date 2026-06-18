@@ -18,22 +18,24 @@ pub struct IsolatedMarketConfig {
     /// Oracle adapter contract used for price feeds in this market.
     pub oracle_adapter: Address,
 
-    /// Maximum collateral ratio (WAD).
-    pub ltv: i128,
-
-    /// Collateral percentage used in health factor (WAD). Must be > ltv.
-    pub liquidation_threshold: i128,
+    /// Liquidation loan-to-value (WAD). Morpho's single risk parameter: a
+    /// position is healthy while `borrow_value <= collateral_value * lltv`, and
+    /// liquidatable once it crosses that line. Must be in (0, WAD).
+    pub lltv: i128,
 
     /// Bonus awarded to liquidators above seized collateral value (WAD).
     pub liquidation_bonus: i128,
 
-    /// Fraction of borrow interest sent to protocol treasury (WAD).
+    /// Governance-set fee on borrower interest sent to the treasury (WAD).
     pub reserve_factor: i128,
 
     /// Maximum total supply of collateral_asset (raw units). 0 = no cap.
+    /// Non-Morpho compatibility control; Morpho Blue has no market-level caps
+    /// (caps belong in vaults/adapters). Retained for migration only.
     pub supply_cap: i128,
 
     /// Maximum total borrow of loan_asset (raw units). 0 = no cap.
+    /// Non-Morpho compatibility control; see `supply_cap`.
     pub borrow_cap: i128,
 
     /// Interest rate model contract address.

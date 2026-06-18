@@ -391,14 +391,6 @@
                           },
                           {
                             "key": {
-                              "symbol": "debt_asset"
-                            },
-                            "val": {
-                              "address": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG"
-                            }
-                          },
-                          {
-                            "key": {
                               "symbol": "liquidation_bonus"
                             },
                             "val": {
@@ -407,7 +399,7 @@
                           },
                           {
                             "key": {
-                              "symbol": "liquidation_threshold"
+                              "symbol": "lltv"
                             },
                             "val": {
                               "i128": "800000000000000000"
@@ -415,10 +407,10 @@
                           },
                           {
                             "key": {
-                              "symbol": "ltv"
+                              "symbol": "loan_asset"
                             },
                             "val": {
-                              "i128": "700000000000000000"
+                              "address": "CDLDVFKHEZ2RVB3NG4UQA4VPD3TSHV6XMHXMHP2BSGCJ2IIWVTOHGDSG"
                             }
                           },
                           {

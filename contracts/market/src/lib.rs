@@ -465,10 +465,8 @@ impl IsolatedMarketContract {
     }
 
     fn validate_config(config: &IsolatedMarketConfig) -> Result<(), MarketError> {
-        if config.ltv <= 0
-            || config.ltv >= WAD
-            || config.liquidation_threshold <= config.ltv
-            || config.liquidation_threshold >= WAD
+        if config.lltv <= 0
+            || config.lltv >= WAD
             || config.liquidation_bonus < 0
             || config.liquidation_bonus > MAX_LIQUIDATION_BONUS
             || config.reserve_factor < 0
@@ -553,10 +551,6 @@ impl IsolatedMarketContract {
         let collateral = from_scaled(position.scaled_supply, state.supply_index);
         let collateral_value = wad_mul(collateral, Self::price(env, &config.collateral_asset)?);
         let debt_value = wad_mul(debt, Self::price(env, &config.loan_asset)?);
-        Ok(health_factor(
-            collateral_value,
-            config.liquidation_threshold,
-            debt_value,
-        ))
+        Ok(health_factor(collateral_value, config.lltv, debt_value))
     }
 }

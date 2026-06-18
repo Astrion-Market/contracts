@@ -107,7 +107,7 @@ struct Setup {
 
 /// Deploy an isolated market with:
 ///   collateral price = 1 WAD,  debt price = 10 WAD.
-///   LTV 70%, liquidation_threshold 80%, bonus 5%.
+///   LLTV 80%, bonus 5%.
 ///
 /// With these prices:
 ///   Supply 1000 collateral → value $1000, weighted $800.
@@ -137,8 +137,7 @@ fn setup(env: &Env) -> Setup {
             collateral_asset: collateral.clone(),
             loan_asset: debt.clone(),
             oracle_adapter: oracle_id.clone(),
-            ltv: WAD * 70 / 100,
-            liquidation_threshold: WAD * 80 / 100,
+            lltv: WAD * 80 / 100,
             liquidation_bonus: WAD * 5 / 100,
             reserve_factor: WAD / 10,
             supply_cap: 0,
@@ -179,7 +178,7 @@ fn test_initialize_success() {
     env.mock_all_auths();
     let s = setup(&env);
     let cfg = market(&env, &s).get_market_config().unwrap();
-    assert_eq!(cfg.ltv, WAD * 70 / 100);
+    assert_eq!(cfg.lltv, WAD * 80 / 100);
 }
 
 #[test]
@@ -192,8 +191,7 @@ fn test_double_initialize_fails() {
         collateral_asset: s.collateral.clone(),
         loan_asset: s.debt.clone(),
         oracle_adapter: s.oracle_id.clone(),
-        ltv: WAD * 70 / 100,
-        liquidation_threshold: WAD * 80 / 100,
+        lltv: WAD * 80 / 100,
         liquidation_bonus: WAD * 5 / 100,
         reserve_factor: WAD / 10,
         supply_cap: 0,
@@ -219,14 +217,13 @@ fn test_initialize_invalid_config_fails() {
     let oracle_id = env.register(MockOracle, ());
 
     let market_id = env.register(IsolatedMarketContract, ());
-    // ltv (90%) > liquidation_threshold (80%) — invalid
+    // lltv == WAD (100%) is out of range — invalid
     let result = IsolatedMarketContractClient::new(&env, &market_id).try_initialize(
         &IsolatedMarketConfig {
             collateral_asset: collateral,
             loan_asset: debt,
             oracle_adapter: oracle_id,
-            ltv: WAD * 90 / 100,
-            liquidation_threshold: WAD * 80 / 100,
+            lltv: WAD,
             liquidation_bonus: WAD * 5 / 100,
             reserve_factor: WAD / 10,
             supply_cap: 0,
@@ -279,8 +276,7 @@ fn test_supply_cap_enforced() {
             collateral_asset: collateral.clone(),
             loan_asset: debt.clone(),
             oracle_adapter: oracle_id.clone(),
-            ltv: WAD * 70 / 100,
-            liquidation_threshold: WAD * 80 / 100,
+            lltv: WAD * 80 / 100,
             liquidation_bonus: WAD * 5 / 100,
             reserve_factor: WAD / 10,
             supply_cap: 500,
@@ -406,8 +402,7 @@ fn test_borrow_cap_enforced() {
             collateral_asset: collateral.clone(),
             loan_asset: debt.clone(),
             oracle_adapter: oracle_id,
-            ltv: WAD * 70 / 100,
-            liquidation_threshold: WAD * 80 / 100,
+            lltv: WAD * 80 / 100,
             liquidation_bonus: WAD * 5 / 100,
             reserve_factor: WAD / 10,
             supply_cap: 0,
