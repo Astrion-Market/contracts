@@ -22,6 +22,9 @@
 #![no_std]
 #![allow(deprecated)]
 
+#[cfg(test)]
+mod test;
+
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Vec};
 
 // ---------------------------------------------------------------------------
@@ -39,6 +42,10 @@ enum DataKey {
     Markets,
     /// Lookup: (collateral_asset, loan_asset) → market address.
     MarketByPair(Address, Address),
+    /// Governance-approved interest rate models.
+    EnabledIrm(Address),
+    /// Governance-approved liquidation LTVs (WAD).
+    EnabledLltv(i128),
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +150,48 @@ impl MarketFactoryContract {
             market.clone(),
         );
         Ok(market)
+    }
+
+    // -----------------------------------------------------------------------
+    // Governance: enabled IRM / LLTV registries
+    // -----------------------------------------------------------------------
+    //
+    // Morpho externalizes risk: anyone may create a market, but governance bounds
+    // the parameter space by approving which interest rate models and which
+    // liquidation LTVs are allowed.
+
+    /// Approve an interest rate model for use in new markets (admin only).
+    pub fn enable_irm(env: Env, rate_model: Address) -> Result<(), FactoryError> {
+        require_live_admin(&env)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::EnabledIrm(rate_model.clone()), &true);
+        env.events().publish((symbol_short!("irm_on"),), rate_model);
+        Ok(())
+    }
+
+    /// Approve a liquidation LTV (WAD) for use in new markets (admin only).
+    pub fn enable_lltv(env: Env, lltv: i128) -> Result<(), FactoryError> {
+        require_live_admin(&env)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::EnabledLltv(lltv), &true);
+        env.events().publish((symbol_short!("lltv_on"),), lltv);
+        Ok(())
+    }
+
+    pub fn is_irm_enabled(env: Env, rate_model: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::EnabledIrm(rate_model))
+            .unwrap_or(false)
+    }
+
+    pub fn is_lltv_enabled(env: Env, lltv: i128) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::EnabledLltv(lltv))
+            .unwrap_or(false)
     }
 
     // -----------------------------------------------------------------------
