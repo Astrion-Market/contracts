@@ -944,6 +944,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "market-adapter"
+version = "0.1.0"
+dependencies = [
+ "astrion-market-types",
+ "astrion-math",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "market-factory"
 version = "0.1.0"
 dependencies = [
