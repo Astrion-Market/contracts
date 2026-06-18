@@ -133,6 +133,14 @@ fn set_cap(s: &Setup, id: &BytesN<32>, absolute_cap: i128, relative_cap: i128) {
     s.client.set_caps(id, &absolute_cap, &relative_cap);
 }
 
+fn set_liquidity(s: &Setup, adapter: &Address, data: &Bytes) {
+    let action = symbol_short!("liquid");
+    let args_hash = s.client.hash_liquidity_args(&Some(adapter.clone()), data);
+    s.client.submit(&s.owner, &action, &args_hash);
+    s.client
+        .set_liquidity_adapter_and_data(&Some(adapter.clone()), data);
+}
+
 #[test]
 fn test_initialize_success() {
     let env = Env::default();
@@ -415,4 +423,34 @@ fn test_allocate_enforces_caps_and_deallocate_updates_allocation() {
         .deallocate(&allocator, &adapter, &data, &150, &symbol_short!("withdr"));
     assert_eq!(s.client.allocation(&id), 250);
     assert_eq!(token::Client::new(&s.env, &s.asset).balance(&adapter), 250);
+}
+
+#[test]
+fn test_liquidity_adapter_auto_allocates_and_deallocates() {
+    let s = setup();
+    let user = Address::generate(&s.env);
+    let adapter = s.env.register(MockAdapter, ());
+    let adapter_client = MockAdapterClient::new(&s.env, &adapter);
+    adapter_client.initialize(&s.asset);
+    let data = Bytes::from_array(&s.env, &[5, 6, 7, 8]);
+    let id = s.env.crypto().sha256(&data).to_bytes();
+
+    enable_adapter(&s, &adapter);
+    set_cap(&s, &id, 2_000, 0);
+    set_liquidity(&s, &adapter, &data);
+
+    mint_asset(&s.env, &s.asset, &user, 1_000);
+    s.client.deposit(&user, &1_000, &user);
+
+    assert_eq!(s.client.allocation(&id), 1_000);
+    assert_eq!(token::Client::new(&s.env, &s.asset).balance(&s.vault_id), 0);
+    assert_eq!(
+        token::Client::new(&s.env, &s.asset).balance(&adapter),
+        1_000
+    );
+
+    s.client.withdraw(&user, &250, &user, &user);
+    assert_eq!(s.client.allocation(&id), 750);
+    assert_eq!(token::Client::new(&s.env, &s.asset).balance(&adapter), 750);
+    assert_eq!(token::Client::new(&s.env, &s.asset).balance(&user), 250);
 }

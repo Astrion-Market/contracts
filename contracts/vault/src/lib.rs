@@ -715,6 +715,7 @@ impl VaultContract {
             env.current_contract_address(),
             &assets,
         );
+        Self::auto_allocate_liquidity(env, assets)?;
         env.events().publish(
             (symbol_short!("deposit"), caller.clone()),
             (receiver.clone(), assets, shares),
@@ -746,6 +747,7 @@ impl VaultContract {
             env.current_contract_address(),
             &assets,
         );
+        Self::auto_allocate_liquidity(env, assets)?;
         env.events().publish(
             (symbol_short!("mint"), caller.clone()),
             (receiver.clone(), assets, shares),
@@ -770,6 +772,7 @@ impl VaultContract {
         if shares <= 0 {
             return Err(VaultError::InvalidAmount);
         }
+        Self::ensure_idle_liquidity(env, assets)?;
         Self::spend_allowance_if_needed(env, caller, owner, shares)?;
         Self::burn_shares(env, owner, shares, &mut state)?;
         if assets > token::Client::new(env, &config.asset).balance(&env.current_contract_address())
@@ -807,6 +810,7 @@ impl VaultContract {
         if assets <= 0 {
             return Err(VaultError::InvalidAmount);
         }
+        Self::ensure_idle_liquidity(env, assets)?;
         Self::spend_allowance_if_needed(env, caller, owner, shares)?;
         Self::burn_shares(env, owner, shares, &mut state)?;
         if assets > token::Client::new(env, &config.asset).balance(&env.current_contract_address())
@@ -836,9 +840,6 @@ impl VaultContract {
     ) -> Result<(), VaultError> {
         if assets <= 0 {
             return Err(VaultError::InvalidAmount);
-        }
-        if !read_is_adapter(env, adapter) {
-            return Err(VaultError::AdapterNotEnabled);
         }
         Self::accrue_interest_internal(env)?;
         let config = read_config(env).ok_or(VaultError::NotInitialized)?;
@@ -898,6 +899,26 @@ impl VaultContract {
         env.events()
             .publish((symbol_short!("dealloc"), adapter.clone()), assets);
         Ok(())
+    }
+
+    fn auto_allocate_liquidity(env: &Env, assets: i128) -> Result<(), VaultError> {
+        if let Some(adapter) = read_liquidity_adapter(env) {
+            let data = read_liquidity_data(env);
+            Self::allocate_internal(env, &adapter, &data, assets, &symbol_short!("liquid"))?;
+        }
+        Ok(())
+    }
+
+    fn ensure_idle_liquidity(env: &Env, assets: i128) -> Result<(), VaultError> {
+        let config = read_config(env).ok_or(VaultError::NotInitialized)?;
+        let idle = token::Client::new(env, &config.asset).balance(&env.current_contract_address());
+        if idle >= assets {
+            return Ok(());
+        }
+        let shortfall = assets - idle;
+        let adapter = read_liquidity_adapter(env).ok_or(VaultError::InsufficientLiquidity)?;
+        let data = read_liquidity_data(env);
+        Self::deallocate_internal(env, &adapter, &data, shortfall, &symbol_short!("liquid"))
     }
 
     fn apply_adapter_change(
