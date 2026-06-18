@@ -521,6 +521,32 @@ fn test_pause_blocks_supply() {
     m.supply(&lender, &100_i128, &lender); // succeeds after unpause
 }
 
+#[test]
+fn test_migrate_rejects_non_increasing_version() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    assert_eq!(m.app_version(), 1);
+    let result = m.try_migrate(&s.treasury, &1_u32);
+
+    assert_eq!(result, Err(Ok(MarketError::InvalidVersion)));
+}
+
+#[test]
+fn test_migrate_requires_treasury_auth_context() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+    let stranger = Address::generate(&env);
+
+    let result = m.try_migrate(&stranger, &2_u32);
+
+    assert_eq!(result, Err(Ok(MarketError::Unauthorized)));
+}
+
 // ---------------------------------------------------------------------------
 // Borrow / repay helpers
 // ---------------------------------------------------------------------------
