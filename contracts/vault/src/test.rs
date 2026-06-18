@@ -31,3 +31,27 @@ fn test_initialize_success() {
     assert_eq!(state.total_assets, 0);
     assert_eq!(state.total_shares, 0);
 }
+
+#[test]
+fn test_approve_and_balance_storage() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let vault_id = env.register(VaultContract, ());
+    let client = VaultContractClient::new(&env, &vault_id);
+
+    let owner = Address::generate(&env);
+    let asset = Address::generate(&env);
+    let spender = Address::generate(&env);
+    client.initialize(
+        &owner,
+        &asset,
+        &String::from_str(&env, "Astrion USDC Vault"),
+        &String::from_str(&env, "asUSDC"),
+        &7,
+    );
+
+    client.approve(&owner, &spender, &123);
+    assert_eq!(client.allowance(&owner, &spender), 123);
+
+    assert_eq!(client.balance_of(&owner), 0);
+}

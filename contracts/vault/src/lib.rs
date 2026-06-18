@@ -2,12 +2,18 @@
 #![allow(deprecated)]
 
 mod errors;
+mod storage;
 mod types;
 
 #[cfg(test)]
 mod test;
 
 use errors::VaultError;
+use storage::{
+    allowance as read_allowance, balance as read_balance, get_config as read_config,
+    get_state as read_state, is_initialized, set_allowance as write_allowance,
+    set_config as write_config, set_initialized, set_state as write_state,
+};
 use soroban_sdk::{contract, contractimpl, Address, Env, String};
 use types::{VaultConfig, VaultState};
 
@@ -24,7 +30,7 @@ impl VaultContract {
         symbol: String,
         decimals: u32,
     ) -> Result<(), VaultError> {
-        if env.storage().instance().has(&DataKey::Initialized) {
+        if is_initialized(&env) {
             return Err(VaultError::AlreadyInitialized);
         }
 
@@ -49,27 +55,37 @@ impl VaultContract {
             last_update_timestamp: env.ledger().timestamp(),
         };
 
-        env.storage().instance().set(&DataKey::Config, &config);
-        env.storage().instance().set(&DataKey::State, &state);
-        env.storage().instance().set(&DataKey::Initialized, &true);
+        write_config(&env, &config);
+        write_state(&env, &state);
+        set_initialized(&env);
         Ok(())
     }
 
     pub fn get_config(env: Env) -> Option<VaultConfig> {
-        env.storage().instance().get(&DataKey::Config)
+        read_config(&env)
     }
 
     pub fn get_state(env: Env) -> Option<VaultState> {
-        env.storage().instance().get(&DataKey::State)
+        read_state(&env)
     }
-}
 
-#[derive(Clone)]
-#[soroban_sdk::contracttype]
-enum DataKey {
-    Config,
-    State,
-    Initialized,
+    pub fn balance_of(env: Env, user: Address) -> i128 {
+        read_balance(&env, &user)
+    }
+
+    pub fn allowance(env: Env, owner: Address, spender: Address) -> i128 {
+        read_allowance(&env, &owner, &spender)
+    }
+
+    pub fn approve(env: Env, owner: Address, spender: Address, shares: i128) -> Result<(), VaultError> {
+        owner.require_auth();
+        if shares < 0 {
+            return Err(VaultError::InvalidAmount);
+        }
+        write_allowance(&env, &owner, &spender, shares);
+        Ok(())
+    }
+
 }
 
 const SECONDS_PER_YEAR: i128 = 31_536_000;
