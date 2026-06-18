@@ -2,33 +2,33 @@
 //!
 //! A self-contained two-asset lending pool deployed by `MarketFactory`.
 //!
-//! ## Design
+//! ## Design (Morpho Blue model)
 //!
 //! Each isolated market holds:
-//! - `collateral_asset` — the asset deposited as collateral
-//! - `loan_asset`       — the asset supplied by lenders and borrowed by borrowers
+//! - `collateral_asset` — posted by borrowers, never lent out
+//! - `loan_asset`       — supplied by lenders and borrowed by borrowers
 //!
-//! Risk is ring-fenced: a bad oracle or insolvent position in this market
-//! cannot affect the CorePool or other isolated markets.
+//! Lender supply and borrower collateral are tracked separately. Supplying the
+//! loan asset earns interest; posting collateral does not. Risk is ring-fenced:
+//! a bad oracle or insolvent position in this market cannot affect the CorePool
+//! or other isolated markets.
 //!
-//! ## Architecture
+//! ## Accounting
 //!
-//! ```text
-//! MarketFactory
-//!   └── deploys → IsolatedMarket (this contract, one per market pair)
-//!                   ├── OracleAdapter  (shared, passed at init)
-//!                   └── RateModel      (shared or per-market, passed at init)
-//! ```
+//! Morpho-style share accounting:
+//! - Supply shares are a pro-rata claim on `total_supply_assets`.
+//! - Borrow shares are a pro-rata obligation against `total_borrow_assets`.
+//! - Interest accrual increases `total_borrow_assets`; lenders' claim grows by
+//!   the borrower interest minus the protocol fee.
 //!
-//! ## Implementation status: SCAFFOLD
+//! ## Implementation status: STEP 2 (lender supply + borrower collateral)
 //!
-//! All public function signatures are final. Implement bodies in this order:
-//!   1. `supply` — simplest, no HF check needed.
-//!   2. `accrue_interest` — needed by borrow/repay/withdraw.
-//!   3. `borrow` — needs oracle + HF check.
-//!   4. `repay`  — straightforward share burn.
-//!   5. `withdraw` — needs HF check.
-//!   6. `liquidate` — most complex, do last.
+//! This crate is mid-port. Step 2 implements the lender pool (`supply`,
+//! `withdraw`) and borrower collateral (`supply_collateral`,
+//! `withdraw_collateral`) on the new share model. Borrowing, repayment, and
+//! liquidation are rebuilt on the same model in the next step. Share-math
+//! hardening (virtual shares, conservative rounding, checked arithmetic) is
+//! Step 3.
 
 #![no_std]
 #![allow(deprecated)]
@@ -39,12 +39,12 @@ mod types;
 #[cfg(test)]
 mod test;
 
-use astrion_math::{from_scaled, health_factor, to_scaled, wad_div, wad_mul, WAD};
+use astrion_math::{health_factor, wad_mul, WAD};
 use errors::MarketError;
 use soroban_sdk::{
     contract, contractclient, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
 };
-use types::{IsolatedMarketConfig, IsolatedMarketState, UserPosition};
+use types::{IsolatedMarketConfig, IsolatedMarketState, MarketPosition};
 
 // ---------------------------------------------------------------------------
 // Storage
@@ -97,6 +97,29 @@ pub trait RateModel {
 }
 
 // ---------------------------------------------------------------------------
+// Share math (Step 2: plain pro-rata; Step 3 hardens with virtual shares,
+// conservative rounding, and checked arithmetic).
+// ---------------------------------------------------------------------------
+
+/// Convert `assets` to shares given the pool totals. Empty pool mints 1:1.
+fn to_shares(assets: i128, total_assets: i128, total_shares: i128) -> i128 {
+    if total_shares == 0 || total_assets == 0 {
+        assets
+    } else {
+        assets * total_shares / total_assets
+    }
+}
+
+/// Convert `shares` to assets given the pool totals.
+fn to_assets(shares: i128, total_assets: i128, total_shares: i128) -> i128 {
+    if total_shares == 0 {
+        0
+    } else {
+        shares * total_assets / total_shares
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Contract
 // ---------------------------------------------------------------------------
 
@@ -114,11 +137,12 @@ impl IsolatedMarketContract {
         }
         Self::validate_config(&config)?;
         let state = IsolatedMarketState {
-            supply_index: WAD,
-            borrow_index: WAD,
-            total_scaled_supply: 0,
-            total_scaled_borrow: 0,
-            protocol_reserves: 0,
+            total_supply_assets: 0,
+            total_supply_shares: 0,
+            total_borrow_assets: 0,
+            total_borrow_shares: 0,
+            total_collateral: 0,
+            fee_assets: 0,
             last_update_timestamp: env.ledger().timestamp(),
         };
         env.storage().instance().set(&DataKey::Config, &config);
@@ -133,225 +157,180 @@ impl IsolatedMarketContract {
     }
 
     // -----------------------------------------------------------------------
-    // User operations
+    // Lender operations (loan asset)
     // -----------------------------------------------------------------------
 
-    /// Supply `amount` of the collateral asset.
+    /// Supply `assets` of the loan asset, crediting supply shares to `on_behalf`.
     ///
-    /// Caller earns interest on their deposited collateral and can use it to
-    /// borrow the loan asset.
-    pub fn supply(env: Env, supplier: Address, amount: i128) -> Result<(), MarketError> {
+    /// The supplier pays the assets; shares can be credited to another account.
+    /// Lenders earn interest as borrowers accrue it.
+    pub fn supply(
+        env: Env,
+        supplier: Address,
+        assets: i128,
+        on_behalf: Address,
+    ) -> Result<i128, MarketError> {
         supplier.require_auth();
         Self::guard_live(&env)?;
-        if amount <= 0 {
+        if assets <= 0 {
             return Err(MarketError::InvalidAmount);
         }
         Self::accrue_interest_internal(&env)?;
         let config = Self::config(&env)?;
         let mut state = Self::state(&env)?;
-        let real_total_supply = from_scaled(state.total_scaled_supply, state.supply_index);
-        if config.supply_cap > 0 && real_total_supply + amount > config.supply_cap {
+        if config.supply_cap > 0 && state.total_supply_assets + assets > config.supply_cap {
             return Err(MarketError::SupplyCapExceeded);
         }
-        let scaled = to_scaled(amount, state.supply_index);
-        if scaled <= 0 {
+        let shares = to_shares(assets, state.total_supply_assets, state.total_supply_shares);
+        if shares <= 0 {
             return Err(MarketError::InvalidAmount);
         }
-        let mut position = Self::position_or_empty(&env, &supplier);
-        position.scaled_supply += scaled;
-        state.total_scaled_supply += scaled;
-        Self::set_position(&env, &supplier, &position);
+        let mut position = Self::position_or_empty(&env, &on_behalf);
+        position.supply_shares += shares;
+        state.total_supply_shares += shares;
+        state.total_supply_assets += assets;
+        Self::set_position(&env, &on_behalf, &position);
+        Self::set_state(&env, &state);
+        token::Client::new(&env, &config.loan_asset).transfer(
+            &supplier,
+            env.current_contract_address(),
+            &assets,
+        );
+        env.events()
+            .publish((symbol_short!("supply"), on_behalf), (assets, shares));
+        Ok(shares)
+    }
+
+    /// Withdraw supplied loan assets, burning supply shares from `on_behalf` and
+    /// sending the assets to `receiver`.
+    ///
+    /// Caller specifies exactly one of `assets` or `shares` (the other is 0).
+    /// No health check: suppliers are not borrowers. Bounded by available
+    /// market liquidity (`total_supply_assets - total_borrow_assets`).
+    pub fn withdraw(
+        env: Env,
+        caller: Address,
+        assets: i128,
+        shares: i128,
+        on_behalf: Address,
+        receiver: Address,
+    ) -> Result<(i128, i128), MarketError> {
+        caller.require_auth();
+        Self::guard_live(&env)?;
+        // Operator delegation (caller != on_behalf) arrives in Step 6.
+        if caller != on_behalf {
+            return Err(MarketError::Unauthorized);
+        }
+        Self::accrue_interest_internal(&env)?;
+        let config = Self::config(&env)?;
+        let mut state = Self::state(&env)?;
+
+        let (assets, shares) = Self::resolve_assets_shares(
+            assets,
+            shares,
+            state.total_supply_assets,
+            state.total_supply_shares,
+        )?;
+
+        let mut position = Self::position_or_empty(&env, &on_behalf);
+        if position.supply_shares < shares {
+            return Err(MarketError::InsufficientSupply);
+        }
+        let available = state.total_supply_assets - state.total_borrow_assets;
+        if assets > available {
+            return Err(MarketError::InsufficientLiquidity);
+        }
+        position.supply_shares -= shares;
+        state.total_supply_shares -= shares;
+        state.total_supply_assets -= assets;
+        Self::set_position(&env, &on_behalf, &position);
+        Self::set_state(&env, &state);
+        token::Client::new(&env, &config.loan_asset).transfer(
+            &env.current_contract_address(),
+            &receiver,
+            &assets,
+        );
+        env.events()
+            .publish((symbol_short!("withdr"), on_behalf), (assets, shares));
+        Ok((assets, shares))
+    }
+
+    // -----------------------------------------------------------------------
+    // Borrower collateral operations
+    // -----------------------------------------------------------------------
+
+    /// Post `assets` of the collateral asset for `on_behalf`.
+    ///
+    /// Collateral does not earn interest and is never lent out.
+    pub fn supply_collateral(
+        env: Env,
+        supplier: Address,
+        assets: i128,
+        on_behalf: Address,
+    ) -> Result<(), MarketError> {
+        supplier.require_auth();
+        Self::guard_live(&env)?;
+        if assets <= 0 {
+            return Err(MarketError::InvalidAmount);
+        }
+        let config = Self::config(&env)?;
+        let mut state = Self::state(&env)?;
+        let mut position = Self::position_or_empty(&env, &on_behalf);
+        position.collateral += assets;
+        state.total_collateral += assets;
+        Self::set_position(&env, &on_behalf, &position);
         Self::set_state(&env, &state);
         token::Client::new(&env, &config.collateral_asset).transfer(
             &supplier,
             env.current_contract_address(),
-            &amount,
+            &assets,
         );
         env.events()
-            .publish((symbol_short!("supply"), supplier), (amount, scaled));
+            .publish((symbol_short!("supcol"), on_behalf), assets);
         Ok(())
     }
 
-    /// Withdraw `amount` of collateral.
+    /// Withdraw `assets` of collateral from `on_behalf` to `receiver`.
     ///
-    /// Fails if the resulting health factor would drop below 1.0.
-    pub fn withdraw(env: Env, user: Address, amount: i128) -> Result<(), MarketError> {
-        user.require_auth();
+    /// Fails if the position would become unhealthy (`borrow_value` exceeds
+    /// `collateral_value * lltv`).
+    pub fn withdraw_collateral(
+        env: Env,
+        caller: Address,
+        assets: i128,
+        on_behalf: Address,
+        receiver: Address,
+    ) -> Result<(), MarketError> {
+        caller.require_auth();
         Self::guard_live(&env)?;
-        if amount <= 0 {
+        if assets <= 0 {
             return Err(MarketError::InvalidAmount);
+        }
+        // Operator delegation (caller != on_behalf) arrives in Step 6.
+        if caller != on_behalf {
+            return Err(MarketError::Unauthorized);
         }
         Self::accrue_interest_internal(&env)?;
         let config = Self::config(&env)?;
         let mut state = Self::state(&env)?;
-        let mut position = Self::position_or_empty(&env, &user);
-        let scaled = to_scaled(amount, state.supply_index);
-        if scaled <= 0 || position.scaled_supply < scaled {
+        let mut position = Self::position_or_empty(&env, &on_behalf);
+        if position.collateral < assets {
             return Err(MarketError::InsufficientCollateral);
         }
-        let real_supply = from_scaled(state.total_scaled_supply, state.supply_index);
-        let real_borrow = from_scaled(state.total_scaled_borrow, state.borrow_index);
-        if amount > real_supply - real_borrow {
-            return Err(MarketError::InsufficientLiquidity);
-        }
-        position.scaled_supply -= scaled;
+        position.collateral -= assets;
         if Self::health_factor_for_position(&env, &config, &state, &position)? < WAD {
             return Err(MarketError::HealthFactorTooLow);
         }
-        state.total_scaled_supply -= scaled;
-        Self::set_position(&env, &user, &position);
+        state.total_collateral -= assets;
+        Self::set_position(&env, &on_behalf, &position);
         Self::set_state(&env, &state);
         token::Client::new(&env, &config.collateral_asset).transfer(
             &env.current_contract_address(),
-            &user,
-            &amount,
+            &receiver,
+            &assets,
         );
         env.events()
-            .publish((symbol_short!("withdr"), user), (amount, scaled));
-        Ok(())
-    }
-
-    /// Borrow `amount` of the loan asset against supplied collateral.
-    pub fn borrow(env: Env, borrower: Address, amount: i128) -> Result<(), MarketError> {
-        borrower.require_auth();
-        Self::guard_live(&env)?;
-        if amount <= 0 {
-            return Err(MarketError::InvalidAmount);
-        }
-        Self::accrue_interest_internal(&env)?;
-        let config = Self::config(&env)?;
-        let mut state = Self::state(&env)?;
-        let real_borrow = from_scaled(state.total_scaled_borrow, state.borrow_index);
-        if config.borrow_cap > 0 && real_borrow + amount > config.borrow_cap {
-            return Err(MarketError::BorrowCapExceeded);
-        }
-        let real_supply = from_scaled(state.total_scaled_supply, state.supply_index);
-        if amount > real_supply - real_borrow {
-            return Err(MarketError::InsufficientLiquidity);
-        }
-        let scaled = to_scaled(amount, state.borrow_index);
-        let mut position = Self::position_or_empty(&env, &borrower);
-        position.scaled_borrow += scaled;
-        if Self::health_factor_for_position(&env, &config, &state, &position)? < WAD {
-            return Err(MarketError::HealthFactorTooLow);
-        }
-        state.total_scaled_borrow += scaled;
-        Self::set_position(&env, &borrower, &position);
-        Self::set_state(&env, &state);
-        token::Client::new(&env, &config.loan_asset).transfer(
-            &env.current_contract_address(),
-            &borrower,
-            &amount,
-        );
-        env.events()
-            .publish((symbol_short!("borrow"), borrower), (amount, scaled));
-        Ok(())
-    }
-
-    /// Repay `amount` of borrowed debt on behalf of `on_behalf_of`.
-    pub fn repay(
-        env: Env,
-        payer: Address,
-        on_behalf_of: Address,
-        amount: i128,
-    ) -> Result<(), MarketError> {
-        payer.require_auth();
-        Self::guard_live(&env)?;
-        if amount <= 0 {
-            return Err(MarketError::InvalidAmount);
-        }
-        Self::accrue_interest_internal(&env)?;
-        let config = Self::config(&env)?;
-        let mut state = Self::state(&env)?;
-        let mut position = Self::position_or_empty(&env, &on_behalf_of);
-        let debt = from_scaled(position.scaled_borrow, state.borrow_index);
-        if debt == 0 {
-            return Ok(());
-        }
-        let actual = if amount > debt { debt } else { amount };
-        let mut scaled = to_scaled(actual, state.borrow_index);
-        if scaled > position.scaled_borrow {
-            scaled = position.scaled_borrow;
-        }
-        position.scaled_borrow -= scaled;
-        state.total_scaled_borrow -= scaled;
-        Self::set_position(&env, &on_behalf_of, &position);
-        Self::set_state(&env, &state);
-        token::Client::new(&env, &config.loan_asset).transfer(
-            &payer,
-            env.current_contract_address(),
-            &actual,
-        );
-        env.events()
-            .publish((symbol_short!("repay"), payer, on_behalf_of), actual);
-        Ok(())
-    }
-
-    // -----------------------------------------------------------------------
-    // Liquidation
-    // -----------------------------------------------------------------------
-
-    /// Liquidate an undercollateralised position.
-    ///
-    /// The liquidator repays up to `close_factor * debt` and receives the
-    /// equivalent collateral value plus `liquidation_bonus`.
-    pub fn liquidate(
-        env: Env,
-        liquidator: Address,
-        borrower: Address,
-        repay_amount: i128,
-    ) -> Result<(), MarketError> {
-        liquidator.require_auth();
-        Self::guard_live(&env)?;
-        if repay_amount <= 0 {
-            return Err(MarketError::InvalidAmount);
-        }
-        Self::accrue_interest_internal(&env)?;
-        let config = Self::config(&env)?;
-        let mut state = Self::state(&env)?;
-        let mut position = Self::position_or_empty(&env, &borrower);
-        if Self::health_factor_for_position(&env, &config, &state, &position)? >= WAD {
-            return Err(MarketError::HealthFactorOk);
-        }
-        let debt = from_scaled(position.scaled_borrow, state.borrow_index);
-        let max_repay = wad_mul(debt, WAD / 2);
-        let actual = if repay_amount > max_repay {
-            max_repay
-        } else {
-            repay_amount
-        };
-        let debt_value = wad_mul(actual, Self::price(&env, &config.loan_asset)?);
-        let with_bonus = wad_mul(debt_value, WAD + config.liquidation_bonus);
-        let collateral = wad_div(with_bonus, Self::price(&env, &config.collateral_asset)?);
-        let user_collateral = from_scaled(position.scaled_supply, state.supply_index);
-        if collateral > user_collateral {
-            return Err(MarketError::InsufficientCollateral);
-        }
-        let mut debt_scaled = to_scaled(actual, state.borrow_index);
-        if debt_scaled > position.scaled_borrow {
-            debt_scaled = position.scaled_borrow;
-        }
-        let collateral_scaled = to_scaled(collateral, state.supply_index);
-        position.scaled_borrow -= debt_scaled;
-        position.scaled_supply -= collateral_scaled;
-        state.total_scaled_borrow -= debt_scaled;
-        state.total_scaled_supply -= collateral_scaled;
-        Self::set_position(&env, &borrower, &position);
-        Self::set_state(&env, &state);
-        token::Client::new(&env, &config.loan_asset).transfer(
-            &liquidator,
-            env.current_contract_address(),
-            &actual,
-        );
-        token::Client::new(&env, &config.collateral_asset).transfer(
-            &env.current_contract_address(),
-            &liquidator,
-            &collateral,
-        );
-        env.events().publish(
-            (symbol_short!("liq"), liquidator, borrower),
-            (actual, collateral),
-        );
+            .publish((symbol_short!("wdcol"), on_behalf), assets);
         Ok(())
     }
 
@@ -376,7 +355,7 @@ impl IsolatedMarketContract {
         Self::health_factor_for_position(&env, &config, &state, &position)
     }
 
-    pub fn get_user_position(env: Env, user: Address) -> Option<UserPosition> {
+    pub fn get_user_position(env: Env, user: Address) -> Option<MarketPosition> {
         env.storage().persistent().get(&DataKey::Position(user))
     }
 
@@ -426,11 +405,12 @@ impl IsolatedMarketContract {
     // Internal
     // -----------------------------------------------------------------------
 
-    /// Accrue interest on both supply and borrow indexes.
+    /// Accrue interest on the borrow side and credit lenders.
     ///
-    /// Same algorithm as CorePool::accrue_interest_internal.
-    /// See that function's doc comment for the full formula.
-    #[allow(dead_code)]
+    /// Morpho model: borrower interest increases `total_borrow_assets`; lenders'
+    /// claim (`total_supply_assets`) grows by that interest minus the protocol
+    /// fee, which accrues to `fee_assets`. Multiply before dividing to avoid
+    /// truncating the rate (Step 3 will add compounding and checked arithmetic).
     fn accrue_interest_internal(env: &Env) -> Result<(), MarketError> {
         let config = Self::config(env)?;
         let mut state = Self::state(env)?;
@@ -438,30 +418,44 @@ impl IsolatedMarketContract {
         if now <= state.last_update_timestamp {
             return Ok(());
         }
-        let delta_t = (now - state.last_update_timestamp) as i128;
-        let total_supply = from_scaled(state.total_scaled_supply, state.supply_index);
-        let total_borrow = from_scaled(state.total_scaled_borrow, state.borrow_index);
-        if total_supply == 0 || total_borrow == 0 {
+        let elapsed = (now - state.last_update_timestamp) as i128;
+        if state.total_borrow_assets == 0 {
             state.last_update_timestamp = now;
             Self::set_state(env, &state);
             return Ok(());
         }
-        let rates =
-            RateModelClient::new(env, &config.rate_model).get_rates(&total_borrow, &total_supply);
-        let borrow_growth = WAD + (rates.borrow_rate / SECONDS_PER_YEAR) * delta_t;
-        let supply_growth = WAD + (rates.supply_rate / SECONDS_PER_YEAR) * delta_t;
-        let new_borrow_index = wad_mul(state.borrow_index, borrow_growth);
-        let new_supply_index = wad_mul(state.supply_index, supply_growth);
-        let interest_accrued = wad_mul(
-            state.total_scaled_borrow,
-            new_borrow_index - state.borrow_index,
-        );
-        state.protocol_reserves += wad_mul(interest_accrued, config.reserve_factor);
-        state.borrow_index = new_borrow_index;
-        state.supply_index = new_supply_index;
+        let rates = RateModelClient::new(env, &config.rate_model)
+            .get_rates(&state.total_borrow_assets, &state.total_supply_assets);
+        let interest =
+            state.total_borrow_assets * rates.borrow_rate * elapsed / WAD / SECONDS_PER_YEAR;
+        if interest > 0 {
+            let fee = wad_mul(interest, config.reserve_factor);
+            state.total_borrow_assets += interest;
+            state.total_supply_assets += interest - fee;
+            state.fee_assets += fee;
+        }
         state.last_update_timestamp = now;
         Self::set_state(env, &state);
         Ok(())
+    }
+
+    /// Resolve the (assets, shares) pair for a withdraw: exactly one input must
+    /// be positive; the other is derived from the supply pool totals.
+    fn resolve_assets_shares(
+        assets: i128,
+        shares: i128,
+        total_assets: i128,
+        total_shares: i128,
+    ) -> Result<(i128, i128), MarketError> {
+        if (assets > 0) == (shares > 0) {
+            // Both set or neither set.
+            return Err(MarketError::InconsistentInput);
+        }
+        if assets > 0 {
+            Ok((assets, to_shares(assets, total_assets, total_shares)))
+        } else {
+            Ok((to_assets(shares, total_assets, total_shares), shares))
+        }
     }
 
     fn validate_config(config: &IsolatedMarketConfig) -> Result<(), MarketError> {
@@ -512,17 +506,18 @@ impl IsolatedMarketContract {
         env.storage().instance().set(&DataKey::State, state);
     }
 
-    fn position_or_empty(env: &Env, user: &Address) -> UserPosition {
+    fn position_or_empty(env: &Env, user: &Address) -> MarketPosition {
         env.storage()
             .persistent()
             .get(&DataKey::Position(user.clone()))
-            .unwrap_or(UserPosition {
-                scaled_supply: 0,
-                scaled_borrow: 0,
+            .unwrap_or(MarketPosition {
+                supply_shares: 0,
+                borrow_shares: 0,
+                collateral: 0,
             })
     }
 
-    fn set_position(env: &Env, user: &Address, position: &UserPosition) {
+    fn set_position(env: &Env, user: &Address, position: &MarketPosition) {
         let key = DataKey::Position(user.clone());
         env.storage().persistent().set(&key, position);
         env.storage()
@@ -538,18 +533,23 @@ impl IsolatedMarketContract {
         )
     }
 
+    /// Health factor for a position: `collateral_value * lltv / borrow_value`,
+    /// WAD-scaled. Returns `i128::MAX` when the account has no debt.
     fn health_factor_for_position(
         env: &Env,
         config: &IsolatedMarketConfig,
         state: &IsolatedMarketState,
-        position: &UserPosition,
+        position: &MarketPosition,
     ) -> Result<i128, MarketError> {
-        let debt = from_scaled(position.scaled_borrow, state.borrow_index);
+        let debt = to_assets(
+            position.borrow_shares,
+            state.total_borrow_assets,
+            state.total_borrow_shares,
+        );
         if debt == 0 {
             return Ok(i128::MAX);
         }
-        let collateral = from_scaled(position.scaled_supply, state.supply_index);
-        let collateral_value = wad_mul(collateral, Self::price(env, &config.collateral_asset)?);
+        let collateral_value = wad_mul(position.collateral, Self::price(env, &config.collateral_asset)?);
         let debt_value = wad_mul(debt, Self::price(env, &config.loan_asset)?);
         Ok(health_factor(collateral_value, config.lltv, debt_value))
     }

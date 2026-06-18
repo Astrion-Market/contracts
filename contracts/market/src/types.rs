@@ -29,7 +29,7 @@ pub struct IsolatedMarketConfig {
     /// Governance-set fee on borrower interest sent to the treasury (WAD).
     pub reserve_factor: i128,
 
-    /// Maximum total supply of collateral_asset (raw units). 0 = no cap.
+    /// Maximum total supply of loan_asset (raw units). 0 = no cap.
     /// Non-Morpho compatibility control; Morpho Blue has no market-level caps
     /// (caps belong in vaults/adapters). Retained for migration only.
     pub supply_cap: i128,
@@ -47,25 +47,42 @@ pub struct IsolatedMarketConfig {
 
 /// Live market state — updated on each user interaction.
 ///
-/// Uses the same index-based accounting as CorePool.
-/// See CorePool `MarketState` doc for the full accounting model.
+/// Morpho-style share accounting (replaces the old Aave-style supply/borrow
+/// indexes). Supply shares are a pro-rata claim on `total_supply_assets`;
+/// borrow shares are a pro-rata obligation against `total_borrow_assets`.
+/// Interest accrual increases `total_borrow_assets`, and lenders' claim
+/// (`total_supply_assets`) grows by the borrower interest minus the protocol
+/// fee. Collateral is tracked separately and never lent out.
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct IsolatedMarketState {
-    pub supply_index: i128,
-    pub borrow_index: i128,
-    pub total_scaled_supply: i128,
-    pub total_scaled_borrow: i128,
-    pub protocol_reserves: i128,
+    /// Total loan assets owed to lenders (principal + accrued interest).
+    pub total_supply_assets: i128,
+    /// Total supply shares outstanding.
+    pub total_supply_shares: i128,
+    /// Total loan assets owed by borrowers (principal + accrued interest).
+    pub total_borrow_assets: i128,
+    /// Total borrow shares outstanding.
+    pub total_borrow_shares: i128,
+    /// Total collateral posted across all positions (raw collateral units).
+    pub total_collateral: i128,
+    /// Protocol fee accrued in loan-asset units, claimable by the treasury.
+    pub fee_assets: i128,
     pub last_update_timestamp: u64,
 }
 
 /// Per-user position in this isolated market.
+///
+/// Lender supply (`supply_shares`) and borrower collateral (`collateral`) are
+/// tracked separately: supplying the loan asset is distinct from posting
+/// collateral, exactly as in Morpho Blue.
 #[contracttype]
 #[derive(Clone, Debug)]
-pub struct UserPosition {
-    /// Scaled supply balance of the collateral asset.
-    pub scaled_supply: i128,
-    /// Scaled borrow balance of the loan asset.
-    pub scaled_borrow: i128,
+pub struct MarketPosition {
+    /// Supply shares — pro-rata claim on the lender pool (`total_supply_assets`).
+    pub supply_shares: i128,
+    /// Borrow shares — pro-rata obligation against `total_borrow_assets`.
+    pub borrow_shares: i128,
+    /// Collateral posted by this account (raw collateral-asset units).
+    pub collateral: i128,
 }

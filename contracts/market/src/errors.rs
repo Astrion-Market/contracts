@@ -15,6 +15,10 @@ pub enum MarketError {
     InsufficientCollateral = 12,
     SupplyCapExceeded = 13,
     BorrowCapExceeded = 14,
+    InsufficientSupply = 15,
+    /// Caller specified both `assets` and `shares`, or neither, where exactly
+    /// one is required.
+    InconsistentInput = 16,
 
     // Position health
     HealthFactorTooLow = 20,

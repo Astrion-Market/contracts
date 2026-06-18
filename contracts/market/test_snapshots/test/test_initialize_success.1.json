@@ -363,10 +363,10 @@
                         "map": [
                           {
                             "key": {
-                              "symbol": "borrow_index"
+                              "symbol": "fee_assets"
                             },
                             "val": {
-                              "i128": "1000000000000000000"
+                              "i128": "0"
                             }
                           },
                           {
@@ -379,7 +379,7 @@
                           },
                           {
                             "key": {
-                              "symbol": "protocol_reserves"
+                              "symbol": "total_borrow_assets"
                             },
                             "val": {
                               "i128": "0"
@@ -387,15 +387,7 @@
                           },
                           {
                             "key": {
-                              "symbol": "supply_index"
-                            },
-                            "val": {
-                              "i128": "1000000000000000000"
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "total_scaled_borrow"
+                              "symbol": "total_borrow_shares"
                             },
                             "val": {
                               "i128": "0"
@@ -403,7 +395,23 @@
                           },
                           {
                             "key": {
-                              "symbol": "total_scaled_supply"
+                              "symbol": "total_collateral"
+                            },
+                            "val": {
+                              "i128": "0"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "total_supply_assets"
+                            },
+                            "val": {
+                              "i128": "0"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "total_supply_shares"
                             },
                             "val": {
                               "i128": "0"
