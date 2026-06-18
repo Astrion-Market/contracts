@@ -462,8 +462,9 @@ impl IsolatedMarketContract {
     /// `min_collateral_out` and `deadline` protect the liquidator from price
     /// moves and stale simulations. Returns `(seized_assets, repaid_assets)`.
     ///
-    /// Bad-debt socialization (seizing all collateral with debt remaining) is
-    /// added in the next commit.
+    /// If a liquidation seizes all of the borrower's collateral while debt
+    /// shares remain, the residual is written off as bad debt and socialized
+    /// across lenders (see below).
     pub fn liquidate(
         env: Env,
         liquidator: Address,
@@ -527,6 +528,34 @@ impl IsolatedMarketContract {
         state.total_borrow_shares -= repaid_shares;
         state.total_borrow_assets = zero_floor_sub(state.total_borrow_assets, repaid_assets);
         state.total_collateral -= seized_assets;
+
+        // Bad-debt socialization: if all collateral was seized but debt shares
+        // remain, the residual debt is uncollectible. Write it off by reducing
+        // both the borrow side and the lender claim (`total_supply_assets`),
+        // which lowers the supply share price for all lenders. Recognized only
+        // here, at liquidation time — never lazily.
+        if position.collateral == 0 && position.borrow_shares > 0 {
+            let bad_debt_shares = position.borrow_shares;
+            let owed = to_assets_up(
+                bad_debt_shares,
+                state.total_borrow_assets,
+                state.total_borrow_shares,
+            );
+            let bad_debt_assets = if owed < state.total_borrow_assets {
+                owed
+            } else {
+                state.total_borrow_assets
+            };
+            state.total_borrow_assets = zero_floor_sub(state.total_borrow_assets, bad_debt_assets);
+            state.total_supply_assets = zero_floor_sub(state.total_supply_assets, bad_debt_assets);
+            state.total_borrow_shares -= bad_debt_shares;
+            position.borrow_shares = 0;
+            env.events().publish(
+                (symbol_short!("baddebt"), borrower.clone()),
+                (bad_debt_shares, bad_debt_assets),
+            );
+        }
+
         Self::set_position(&env, &borrower, &position);
         Self::set_state(&env, &state);
         token::Client::new(&env, &config.loan_asset).transfer(

@@ -794,6 +794,62 @@ fn test_liquidate_slippage_exceeded() {
     assert_eq!(result, Err(Ok(MarketError::SlippageExceeded)));
 }
 
+#[test]
+fn test_liquidate_bad_debt_socialized() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+    let oracle = MockOracleClient::new(&env, &s.oracle_id);
+
+    lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+
+    // Deep crash $1 → $0.5: seizing all 1000 collateral repays only part of the
+    // $700 debt, leaving residual debt that must be written off.
+    oracle.set_price(&s.collateral, &(WAD / 2));
+    assert_eq!(m.get_market_state().unwrap().total_supply_assets, 1_000);
+
+    let liquidator = Address::generate(&env);
+    mint_loan(&env, &s, &liquidator, 100);
+
+    // Seize all collateral.
+    m.liquidate(&liquidator, &borrower, &1_000_i128, &0_i128, &0_i128, &NO_DEADLINE);
+
+    // Borrower wiped out, residual debt written off.
+    let pos = m.get_user_position(&borrower).unwrap();
+    assert_eq!(pos.collateral, 0);
+    assert_eq!(pos.borrow_shares, 0);
+    let state = m.get_market_state().unwrap();
+    assert_eq!(state.total_borrow_assets, 0);
+    // Lenders absorbed the loss: supply assets fell below the deposited 1000.
+    assert!(state.total_supply_assets < 1_000);
+}
+
+#[test]
+fn test_bad_debt_lowers_lender_share_price() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+    let oracle = MockOracleClient::new(&env, &s.oracle_id);
+
+    let lender = lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+
+    oracle.set_price(&s.collateral, &(WAD / 2));
+    let liquidator = Address::generate(&env);
+    mint_loan(&env, &s, &liquidator, 100);
+    m.liquidate(&liquidator, &borrower, &1_000_i128, &0_i128, &0_i128, &NO_DEADLINE);
+
+    // The lender redeems all shares and recovers less than the 1000 deposited.
+    let shares = m.get_user_position(&lender).unwrap().supply_shares;
+    let (assets, _) = m.withdraw(&lender, &0_i128, &shares, &lender, &lender);
+    assert!(assets < 1_000, "bad debt must reduce lender redemption value");
+}
+
 // ---------------------------------------------------------------------------
 // Interest accrual
 // ---------------------------------------------------------------------------
