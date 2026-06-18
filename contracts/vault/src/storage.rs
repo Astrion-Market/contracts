@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Env};
+use soroban_sdk::{contracttype, Address, BytesN, Env, Symbol};
 
 use crate::types::{VaultConfig, VaultState};
 
@@ -11,6 +11,11 @@ pub enum DataKey {
     Balance(Address),
     Allowance(Address, Address),
     Locked,
+    IsSentinel(Address),
+    IsAllocator(Address),
+    Timelock(Symbol),
+    Abdicated(Symbol),
+    Pending(Symbol, BytesN<32>),
 }
 
 pub const PERSISTENT_TTL: u32 = 365 * 24 * 60 * 60 / 5;
@@ -81,4 +86,84 @@ pub fn is_locked(env: &Env) -> bool {
 
 pub fn set_locked(env: &Env, locked: bool) {
     env.storage().instance().set(&DataKey::Locked, &locked);
+}
+
+pub fn is_sentinel(env: &Env, user: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .get(&DataKey::IsSentinel(user.clone()))
+        .unwrap_or(false)
+}
+
+pub fn set_sentinel(env: &Env, user: &Address, enabled: bool) {
+    let key = DataKey::IsSentinel(user.clone());
+    env.storage().persistent().set(&key, &enabled);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+}
+
+pub fn is_allocator(env: &Env, user: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .get(&DataKey::IsAllocator(user.clone()))
+        .unwrap_or(false)
+}
+
+pub fn set_allocator(env: &Env, user: &Address, enabled: bool) {
+    let key = DataKey::IsAllocator(user.clone());
+    env.storage().persistent().set(&key, &enabled);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+}
+
+pub fn timelock(env: &Env, action: &Symbol) -> u64 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Timelock(action.clone()))
+        .unwrap_or(0)
+}
+
+pub fn set_timelock(env: &Env, action: &Symbol, duration: u64) {
+    let key = DataKey::Timelock(action.clone());
+    env.storage().persistent().set(&key, &duration);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+}
+
+pub fn is_abdicated(env: &Env, action: &Symbol) -> bool {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Abdicated(action.clone()))
+        .unwrap_or(false)
+}
+
+pub fn set_abdicated(env: &Env, action: &Symbol) {
+    let key = DataKey::Abdicated(action.clone());
+    env.storage().persistent().set(&key, &true);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+}
+
+pub fn executable_at(env: &Env, action: &Symbol, args_hash: &BytesN<32>) -> Option<u64> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Pending(action.clone(), args_hash.clone()))
+}
+
+pub fn set_pending(env: &Env, action: &Symbol, args_hash: &BytesN<32>, executable_at: u64) {
+    let key = DataKey::Pending(action.clone(), args_hash.clone());
+    env.storage().persistent().set(&key, &executable_at);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+}
+
+pub fn clear_pending(env: &Env, action: &Symbol, args_hash: &BytesN<32>) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Pending(action.clone(), args_hash.clone()));
 }

@@ -11,12 +11,18 @@ mod test;
 use errors::VaultError;
 use astrion_math::{mul_div_down, mul_div_up};
 use storage::{
+    clear_pending, executable_at as read_executable_at,
     allowance as read_allowance, balance as read_balance, get_config as read_config,
-    get_state as read_state, is_initialized, is_locked, set_allowance as write_allowance,
+    get_state as read_state, is_abdicated, is_allocator as read_is_allocator,
+    is_initialized, is_locked, is_sentinel as read_is_sentinel, set_abdicated,
+    set_allocator as write_allocator, set_allowance as write_allowance,
     set_balance as write_balance, set_config as write_config, set_initialized, set_locked,
-    set_state as write_state,
+    set_pending, set_sentinel as write_sentinel, set_state as write_state,
+    set_timelock as write_timelock, timelock as read_timelock,
 };
-use soroban_sdk::{contract, contractimpl, symbol_short, token, Address, Env, String};
+use soroban_sdk::{
+    contract, contractimpl, symbol_short, token, Address, BytesN, Env, String, Symbol,
+};
 use types::{AccrualPreview, VaultConfig, VaultState};
 
 #[contract]
@@ -79,6 +85,34 @@ impl VaultContract {
         read_allowance(&env, &owner, &spender)
     }
 
+    pub fn owner(env: Env) -> Option<Address> {
+        read_config(&env).map(|c| c.owner)
+    }
+
+    pub fn curator(env: Env) -> Option<Address> {
+        read_config(&env).map(|c| c.curator)
+    }
+
+    pub fn is_sentinel(env: Env, account: Address) -> bool {
+        read_is_sentinel(&env, &account)
+    }
+
+    pub fn is_allocator(env: Env, account: Address) -> bool {
+        read_is_allocator(&env, &account)
+    }
+
+    pub fn timelock(env: Env, action: Symbol) -> u64 {
+        read_timelock(&env, &action)
+    }
+
+    pub fn executable_at(env: Env, action: Symbol, args_hash: BytesN<32>) -> Option<u64> {
+        read_executable_at(&env, &action, &args_hash)
+    }
+
+    pub fn is_abdicated(env: Env, action: Symbol) -> bool {
+        is_abdicated(&env, &action)
+    }
+
     pub fn approve(
         env: Env,
         owner: Address,
@@ -90,6 +124,180 @@ impl VaultContract {
             return Err(VaultError::InvalidAmount);
         }
         write_allowance(&env, &owner, &spender, shares);
+        Ok(())
+    }
+
+    pub fn set_curator(
+        env: Env,
+        owner: Address,
+        new_curator: Address,
+    ) -> Result<(), VaultError> {
+        owner.require_auth();
+        let mut config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        if owner != config.owner {
+            return Err(VaultError::Unauthorized);
+        }
+        config.curator = new_curator.clone();
+        write_config(&env, &config);
+        env.events()
+            .publish((symbol_short!("curator"),), new_curator);
+        Ok(())
+    }
+
+    pub fn set_sentinel(
+        env: Env,
+        owner: Address,
+        account: Address,
+        enabled: bool,
+    ) -> Result<(), VaultError> {
+        owner.require_auth();
+        let config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        if owner != config.owner {
+            return Err(VaultError::Unauthorized);
+        }
+        write_sentinel(&env, &account, enabled);
+        env.events()
+            .publish((symbol_short!("sentinel"), account), enabled);
+        Ok(())
+    }
+
+    pub fn set_timelock(
+        env: Env,
+        owner: Address,
+        action: Symbol,
+        duration: u64,
+    ) -> Result<(), VaultError> {
+        owner.require_auth();
+        let config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        if owner != config.owner {
+            return Err(VaultError::Unauthorized);
+        }
+        write_timelock(&env, &action, duration);
+        env.events()
+            .publish((symbol_short!("timelock"), action), duration);
+        Ok(())
+    }
+
+    pub fn submit(
+        env: Env,
+        curator: Address,
+        action: Symbol,
+        args_hash: BytesN<32>,
+    ) -> Result<u64, VaultError> {
+        curator.require_auth();
+        let config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        if curator != config.curator {
+            return Err(VaultError::Unauthorized);
+        }
+        if is_abdicated(&env, &action) {
+            return Err(VaultError::Abdicated);
+        }
+        if read_executable_at(&env, &action, &args_hash).is_some() {
+            return Err(VaultError::DataAlreadyPending);
+        }
+        let executable_at = env.ledger().timestamp() + read_timelock(&env, &action);
+        set_pending(&env, &action, &args_hash, executable_at);
+        env.events()
+            .publish((symbol_short!("submit"), action), (args_hash.clone(), executable_at));
+        Ok(executable_at)
+    }
+
+    pub fn revoke(
+        env: Env,
+        caller: Address,
+        action: Symbol,
+        args_hash: BytesN<32>,
+    ) -> Result<(), VaultError> {
+        caller.require_auth();
+        let config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        if caller != config.curator && !read_is_sentinel(&env, &caller) {
+            return Err(VaultError::Unauthorized);
+        }
+        if read_executable_at(&env, &action, &args_hash).is_none() {
+            return Err(VaultError::DataNotTimelocked);
+        }
+        clear_pending(&env, &action, &args_hash);
+        env.events()
+            .publish((symbol_short!("revoke"), action), args_hash);
+        Ok(())
+    }
+
+    pub fn set_allocator(
+        env: Env,
+        account: Address,
+        enabled: bool,
+        args_hash: BytesN<32>,
+    ) -> Result<(), VaultError> {
+        Self::accept(&env, &symbol_short!("alloc"), &args_hash)?;
+        write_allocator(&env, &account, enabled);
+        env.events()
+            .publish((symbol_short!("alloc"), account), enabled);
+        Ok(())
+    }
+
+    pub fn set_performance_fee(
+        env: Env,
+        fee: i128,
+        recipient: Address,
+        args_hash: BytesN<32>,
+    ) -> Result<(), VaultError> {
+        if fee < 0 || fee > MAX_PERFORMANCE_FEE {
+            return Err(VaultError::FeeTooHigh);
+        }
+        Self::accept(&env, &symbol_short!("perf_fee"), &args_hash)?;
+        Self::accrue_interest_internal(&env)?;
+        let mut config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        config.performance_fee = fee;
+        config.performance_fee_recipient = recipient.clone();
+        write_config(&env, &config);
+        env.events()
+            .publish((symbol_short!("perf_fee"), recipient), fee);
+        Ok(())
+    }
+
+    pub fn set_management_fee(
+        env: Env,
+        fee: i128,
+        recipient: Address,
+        args_hash: BytesN<32>,
+    ) -> Result<(), VaultError> {
+        if fee < 0 || fee > MAX_MANAGEMENT_FEE {
+            return Err(VaultError::FeeTooHigh);
+        }
+        Self::accept(&env, &symbol_short!("mgmt_fee"), &args_hash)?;
+        Self::accrue_interest_internal(&env)?;
+        let mut config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        config.management_fee = fee;
+        config.management_fee_recipient = recipient.clone();
+        write_config(&env, &config);
+        env.events()
+            .publish((symbol_short!("mgmt_fee"), recipient), fee);
+        Ok(())
+    }
+
+    pub fn set_max_rate(env: Env, rate: i128, args_hash: BytesN<32>) -> Result<(), VaultError> {
+        if !(0..=MAX_MAX_RATE).contains(&rate) {
+            return Err(VaultError::RateTooHigh);
+        }
+        Self::accept(&env, &symbol_short!("max_rate"), &args_hash)?;
+        Self::accrue_interest_internal(&env)?;
+        let mut config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        config.max_rate = rate;
+        write_config(&env, &config);
+        env.events()
+            .publish((symbol_short!("max_rate"),), rate);
+        Ok(())
+    }
+
+    pub fn abdicate(
+        env: Env,
+        action: Symbol,
+        args_hash: BytesN<32>,
+    ) -> Result<(), VaultError> {
+        Self::accept(&env, &symbol_short!("abdicate"), &args_hash)?;
+        set_abdicated(&env, &action);
+        env.events()
+            .publish((symbol_short!("abdicate"),), action);
         Ok(())
     }
 
@@ -532,10 +740,28 @@ impl VaultContract {
     fn exit(env: &Env) {
         set_locked(env, false);
     }
+
+    fn accept(env: &Env, action: &Symbol, args_hash: &BytesN<32>) -> Result<(), VaultError> {
+        if is_abdicated(env, action) {
+            return Err(VaultError::Abdicated);
+        }
+        let executable_at =
+            read_executable_at(env, action, args_hash).ok_or(VaultError::DataNotTimelocked)?;
+        if env.ledger().timestamp() < executable_at {
+            return Err(VaultError::TimelockNotExpired);
+        }
+        clear_pending(env, action, args_hash);
+        env.events()
+            .publish((symbol_short!("accept"), action.clone()), args_hash.clone());
+        Ok(())
+    }
 }
 
 const SECONDS_PER_YEAR: i128 = 31_536_000;
 const DEFAULT_MAX_RATE: i128 = 2 * astrion_math::WAD / SECONDS_PER_YEAR;
+const MAX_MAX_RATE: i128 = DEFAULT_MAX_RATE;
+const MAX_PERFORMANCE_FEE: i128 = astrion_math::WAD / 2;
+const MAX_MANAGEMENT_FEE: i128 = astrion_math::WAD / 20 / SECONDS_PER_YEAR;
 const VIRTUAL_ASSETS: i128 = 1;
 
 fn pow10(exp: u32) -> i128 {
