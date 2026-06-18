@@ -102,6 +102,91 @@ pub fn from_scaled(scaled: i128, index: i128) -> i128 {
 }
 
 // ---------------------------------------------------------------------------
+// Morpho share accounting
+// ---------------------------------------------------------------------------
+//
+// Pro-rata share/asset conversion with virtual shares and assets, as in Morpho
+// Blue's `SharesMathLib`. The virtual offsets serve two purposes:
+//   1. They make the first deposit's share price well-defined and resist the
+//      first-depositor inflation/griefing attack.
+//   2. They remove division-by-zero on an empty market.
+// All operations use plain i128 arithmetic, which traps (and therefore reverts)
+// on overflow under this workspace's `overflow-checks = true` profile, so the
+// conversions are checked in both contract and test builds.
+
+/// Virtual shares added to `total_shares` in every conversion (Morpho: 1e6).
+pub const VIRTUAL_SHARES: i128 = 1_000_000;
+
+/// Virtual assets added to `total_assets` in every conversion (Morpho: 1).
+pub const VIRTUAL_ASSETS: i128 = 1;
+
+/// `x * y / d`, rounded down (toward zero for non-negative inputs).
+#[inline]
+pub fn mul_div_down(x: i128, y: i128, d: i128) -> i128 {
+    x * y / d
+}
+
+/// `x * y / d`, rounded up.
+#[inline]
+pub fn mul_div_up(x: i128, y: i128, d: i128) -> i128 {
+    (x * y + (d - 1)) / d
+}
+
+/// `max(0, x - y)`.
+#[inline]
+pub fn zero_floor_sub(x: i128, y: i128) -> i128 {
+    if x > y {
+        x - y
+    } else {
+        0
+    }
+}
+
+/// Assets → shares, rounded down. Use when minting shares for a deposit so the
+/// depositor is never credited more than their pro-rata claim.
+#[inline]
+pub fn to_shares_down(assets: i128, total_assets: i128, total_shares: i128) -> i128 {
+    mul_div_down(
+        assets,
+        total_shares + VIRTUAL_SHARES,
+        total_assets + VIRTUAL_ASSETS,
+    )
+}
+
+/// Assets → shares, rounded up. Use when burning shares for a specified asset
+/// withdrawal, or minting debt shares for a borrow, so the protocol is favored.
+#[inline]
+pub fn to_shares_up(assets: i128, total_assets: i128, total_shares: i128) -> i128 {
+    mul_div_up(
+        assets,
+        total_shares + VIRTUAL_SHARES,
+        total_assets + VIRTUAL_ASSETS,
+    )
+}
+
+/// Shares → assets, rounded down. Use when paying out assets for a specified
+/// share redemption so the protocol is favored.
+#[inline]
+pub fn to_assets_down(shares: i128, total_assets: i128, total_shares: i128) -> i128 {
+    mul_div_down(
+        shares,
+        total_assets + VIRTUAL_ASSETS,
+        total_shares + VIRTUAL_SHARES,
+    )
+}
+
+/// Shares → assets, rounded up. Use when valuing debt (overestimate) or when
+/// charging assets for a specified debt-share repayment so solvency is favored.
+#[inline]
+pub fn to_assets_up(shares: i128, total_assets: i128, total_shares: i128) -> i128 {
+    mul_div_up(
+        shares,
+        total_assets + VIRTUAL_ASSETS,
+        total_shares + VIRTUAL_SHARES,
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Oracle normalisation
 // ---------------------------------------------------------------------------
 
@@ -267,6 +352,55 @@ mod tests {
     fn test_negative_values_are_consistent() {
         assert!((wad_mul(-2 * WAD, WAD / 2) + WAD).abs() <= 1);
         assert!((wad_div(-WAD, 2 * WAD) + WAD / 2).abs() <= 1);
+    }
+
+    #[test]
+    fn test_mul_div_rounding_directions() {
+        assert_eq!(mul_div_down(7, 1, 2), 3);
+        assert_eq!(mul_div_up(7, 1, 2), 4);
+        assert_eq!(mul_div_down(6, 1, 2), 3);
+        assert_eq!(mul_div_up(6, 1, 2), 3);
+    }
+
+    #[test]
+    fn test_zero_floor_sub() {
+        assert_eq!(zero_floor_sub(10, 3), 7);
+        assert_eq!(zero_floor_sub(3, 10), 0);
+        assert_eq!(zero_floor_sub(5, 5), 0);
+    }
+
+    #[test]
+    fn test_first_deposit_uses_virtual_offset() {
+        // Empty market: shares = assets * VIRTUAL_SHARES / VIRTUAL_ASSETS.
+        assert_eq!(to_shares_down(1_000, 0, 0), 1_000 * VIRTUAL_SHARES);
+        // No division by zero, and a 1-unit deposit still mints shares.
+        assert_eq!(to_shares_down(1, 0, 0), VIRTUAL_SHARES);
+    }
+
+    #[test]
+    fn test_withdraw_rounds_up_against_user() {
+        // After interest, total_assets > total_shares (per virtual-free view).
+        // A tiny asset withdrawal must burn at least one share, never zero.
+        let total_assets = 1_003;
+        let total_shares = 1_000 * VIRTUAL_SHARES;
+        let shares = to_shares_up(1, total_assets, total_shares);
+        assert!(shares >= 1, "withdrawing 1 asset must burn >= 1 share");
+    }
+
+    #[test]
+    fn test_redeem_all_shares_returns_principal() {
+        // Deposit 1000 into an empty market, then redeem all shares.
+        let shares = to_shares_down(1_000, 0, 0);
+        let assets = to_assets_down(shares, 1_000, shares);
+        assert_eq!(assets, 1_000);
+    }
+
+    #[test]
+    fn test_shares_up_ge_shares_down() {
+        let (ta, ts) = (1_234_i128, 567 * VIRTUAL_SHARES);
+        for assets in [1_i128, 7, 100, 999] {
+            assert!(to_shares_up(assets, ta, ts) >= to_shares_down(assets, ta, ts));
+        }
     }
 
     #[test]
