@@ -25,7 +25,18 @@
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Vec};
+use astrion_market_types::IsolatedMarketConfig;
+use soroban_sdk::{
+    contract, contractclient, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Vec,
+};
+
+/// Client trait for calling the deployed market's `initialize`. Declared here
+/// (rather than depending on the `market` crate) so the factory does not link —
+/// and re-export — the market's contract entrypoints.
+#[contractclient(name = "MarketClient")]
+pub trait IsolatedMarket {
+    fn initialize(env: Env, config: IsolatedMarketConfig);
+}
 
 // ---------------------------------------------------------------------------
 // Storage
@@ -99,24 +110,17 @@ impl MarketFactoryContract {
         Ok(())
     }
 
-    /// Deploy a new isolated market and register it in the factory.
+    /// Deploy a new isolated market, initialise it with `config`, and register it.
     ///
-    /// # Parameters
-    /// `config` — the IsolatedMarketConfig forwarded verbatim to `IsolatedMarket::initialize`.
-    ///
-    /// # Returns
-    /// The address of the newly deployed market contract.
+    /// The factory deploys the IsolatedMarket WASM, calls `initialize(config)` so
+    /// the market is live on return, and records it. Returns the market address.
     pub fn create_market(
         env: Env,
-        collateral_asset: Address,
-        loan_asset: Address,
-        // Remaining config fields passed as-is to IsolatedMarket::initialize.
-        // In practice this would be IsolatedMarketConfig from the market crate,
-        // but to avoid a circular dependency the factory accepts primitives and
-        // assembles the struct, OR the market crate exports its config type.
-        // Decide on cross-crate dependency strategy before implementing.
+        config: IsolatedMarketConfig,
     ) -> Result<Address, FactoryError> {
         require_live_admin(&env)?;
+        let collateral_asset = config.collateral_asset.clone();
+        let loan_asset = config.loan_asset.clone();
         if env.storage().persistent().has(&DataKey::MarketByPair(
             collateral_asset.clone(),
             loan_asset.clone(),
@@ -138,6 +142,8 @@ impl MarketFactoryContract {
             .deployer()
             .with_current_contract(salt)
             .deploy_v2(wasm_hash, ());
+        // Initialise the freshly deployed market with the supplied config.
+        MarketClient::new(&env, &market).initialize(&config);
         let mut updated = markets;
         updated.push_back(market.clone());
         env.storage().persistent().set(&DataKey::Markets, &updated);
