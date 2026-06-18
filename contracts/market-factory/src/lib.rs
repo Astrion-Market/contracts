@@ -10,7 +10,7 @@
 //!              ├── deploys IsolatedMarket WASM via env.deployer()
 //!              ├── calls IsolatedMarket::initialize(config)
 //!              ├── registers market address in factory registry
-//!              └── emits ("market_created", collateral, debt, address)
+//!              └── emits ("market_created", collateral, loan, address)
 //! ```
 //!
 //! The factory is the single source of truth for which isolated markets are
@@ -37,7 +37,7 @@ enum DataKey {
     MarketWasmHash,
     /// Registry of all deployed market addresses.
     Markets,
-    /// Lookup: (collateral_asset, debt_asset) → market address.
+    /// Lookup: (collateral_asset, loan_asset) → market address.
     MarketByPair(Address, Address),
 }
 
@@ -102,7 +102,7 @@ impl MarketFactoryContract {
     pub fn create_market(
         env: Env,
         collateral_asset: Address,
-        debt_asset: Address,
+        loan_asset: Address,
         // Remaining config fields passed as-is to IsolatedMarket::initialize.
         // In practice this would be IsolatedMarketConfig from the market crate,
         // but to avoid a circular dependency the factory accepts primitives and
@@ -112,9 +112,9 @@ impl MarketFactoryContract {
         require_live_admin(&env)?;
         if env.storage().persistent().has(&DataKey::MarketByPair(
             collateral_asset.clone(),
-            debt_asset.clone(),
+            loan_asset.clone(),
         )) || env.storage().persistent().has(&DataKey::MarketByPair(
-            debt_asset.clone(),
+            loan_asset.clone(),
             collateral_asset.clone(),
         )) {
             return Err(FactoryError::MarketAlreadyExists);
@@ -135,11 +135,11 @@ impl MarketFactoryContract {
         updated.push_back(market.clone());
         env.storage().persistent().set(&DataKey::Markets, &updated);
         env.storage().persistent().set(
-            &DataKey::MarketByPair(collateral_asset.clone(), debt_asset.clone()),
+            &DataKey::MarketByPair(collateral_asset.clone(), loan_asset.clone()),
             &market,
         );
         env.events().publish(
-            (symbol_short!("market"), collateral_asset, debt_asset),
+            (symbol_short!("market"), collateral_asset, loan_asset),
             market.clone(),
         );
         Ok(market)
@@ -183,10 +183,10 @@ impl MarketFactoryContract {
     }
 
     /// Return the market address for a given asset pair, if it exists.
-    pub fn get_market(env: Env, collateral: Address, debt: Address) -> Option<Address> {
+    pub fn get_market(env: Env, collateral: Address, loan: Address) -> Option<Address> {
         env.storage()
             .persistent()
-            .get(&DataKey::MarketByPair(collateral, debt))
+            .get(&DataKey::MarketByPair(collateral, loan))
     }
 
     pub fn admin(env: Env) -> Option<Address> {
