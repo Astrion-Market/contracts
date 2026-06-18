@@ -364,6 +364,32 @@ fn test_withdraw_insufficient_supply_fails() {
     assert_eq!(result, Err(Ok(MarketError::InsufficientSupply)));
 }
 
+#[test]
+fn test_withdraw_tiny_amount_burns_shares() {
+    // Regression: once interest accrues, total_supply_assets > total share
+    // value, so plain floor rounding let a small asset withdrawal burn 0 shares
+    // and still pay out (a free-withdrawal leak). With shares rounded UP, any
+    // positive withdrawal must burn at least one share.
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    let lender = lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 10_000);
+    m.borrow(&borrower, &500_i128, &borrower, &borrower);
+
+    // Accrue a year of interest so the supply pool grows above its shares.
+    env.ledger().with_mut(|li| li.timestamp = 31_536_000);
+    m.accrue_interest();
+    assert!(m.get_market_state().unwrap().total_supply_assets > 1_000);
+
+    let before = m.get_user_position(&lender).unwrap().supply_shares;
+    m.withdraw(&lender, &1_i128, &0_i128, &lender, &lender);
+    let after = m.get_user_position(&lender).unwrap().supply_shares;
+    assert!(after < before, "tiny withdrawal must burn shares, not be free");
+}
+
 // ---------------------------------------------------------------------------
 // Borrower collateral
 // ---------------------------------------------------------------------------
@@ -622,8 +648,9 @@ fn test_repay_partial() {
 
     m.repay(&borrower, &30_i128, &0_i128, &borrower);
 
-    let shares = m.get_user_position(&borrower).unwrap().borrow_shares;
-    assert!(shares > 0 && shares < 70);
+    // Shares are virtual-offset scaled now; assert on the debt in asset terms.
+    assert!(m.get_user_position(&borrower).unwrap().borrow_shares > 0);
+    assert_eq!(m.get_market_state().unwrap().total_borrow_assets, 40);
 }
 
 #[test]
@@ -681,8 +708,9 @@ fn test_liquidate_undercollateralized_succeeds() {
 
     assert!(token::Client::new(&env, &s.collateral).balance(&liquidator) > 0);
     let pos = m.get_user_position(&borrower).unwrap();
-    assert!(pos.borrow_shares < 70);
     assert!(pos.collateral < 1_000);
+    // Debt was reduced by the repaid amount.
+    assert!(m.get_market_state().unwrap().total_borrow_assets < 70);
 }
 
 // ---------------------------------------------------------------------------

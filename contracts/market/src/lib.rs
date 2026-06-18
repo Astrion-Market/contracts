@@ -21,14 +21,14 @@
 //! - Interest accrual increases `total_borrow_assets`; lenders' claim grows by
 //!   the borrower interest minus the protocol fee.
 //!
-//! ## Implementation status: STEP 2 (lender supply + borrower collateral)
+//! ## Implementation status: STEP 3 (hardened share accounting)
 //!
-//! This crate is mid-port. Step 2 implements the lender pool (`supply`,
-//! `withdraw`) and borrower collateral (`supply_collateral`,
-//! `withdraw_collateral`) on the new share model. Borrowing, repayment, and
-//! liquidation are rebuilt on the same model in the next step. Share-math
-//! hardening (virtual shares, conservative rounding, checked arithmetic) is
-//! Step 3.
+//! This crate is mid-port. Steps 2–3 implement the lender pool, borrower
+//! collateral, borrow/repay, and liquidation on Morpho share accounting with
+//! virtual shares and conservative, solvency-favoring rounding (deposits down,
+//! withdrawals/borrows up, debt valuation up). Arithmetic traps on overflow.
+//! Morpho's no-close-factor liquidation with bad-debt socialization is Step 4;
+//! operator authorization is Step 6.
 
 #![no_std]
 #![allow(deprecated)]
@@ -39,7 +39,10 @@ mod types;
 #[cfg(test)]
 mod test;
 
-use astrion_math::{health_factor, wad_div, wad_mul, WAD};
+use astrion_math::{
+    health_factor, to_assets_down, to_assets_up, to_shares_down, to_shares_up, wad_div, wad_mul,
+    WAD,
+};
 use errors::MarketError;
 use soroban_sdk::{
     contract, contractclient, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
@@ -94,29 +97,6 @@ pub trait OracleAdapter {
 #[contractclient(name = "RateModelClient")]
 pub trait RateModel {
     fn get_rates(env: Env, total_borrowed: i128, total_supplied: i128) -> RateSnapshot;
-}
-
-// ---------------------------------------------------------------------------
-// Share math (Step 2: plain pro-rata; Step 3 hardens with virtual shares,
-// conservative rounding, and checked arithmetic).
-// ---------------------------------------------------------------------------
-
-/// Convert `assets` to shares given the pool totals. Empty pool mints 1:1.
-fn to_shares(assets: i128, total_assets: i128, total_shares: i128) -> i128 {
-    if total_shares == 0 || total_assets == 0 {
-        assets
-    } else {
-        assets * total_shares / total_assets
-    }
-}
-
-/// Convert `shares` to assets given the pool totals.
-fn to_assets(shares: i128, total_assets: i128, total_shares: i128) -> i128 {
-    if total_shares == 0 {
-        0
-    } else {
-        shares * total_assets / total_shares
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -181,7 +161,7 @@ impl IsolatedMarketContract {
         if config.supply_cap > 0 && state.total_supply_assets + assets > config.supply_cap {
             return Err(MarketError::SupplyCapExceeded);
         }
-        let shares = to_shares(assets, state.total_supply_assets, state.total_supply_shares);
+        let shares = to_shares_down(assets, state.total_supply_assets, state.total_supply_shares);
         if shares <= 0 {
             return Err(MarketError::InvalidAmount);
         }
@@ -225,12 +205,25 @@ impl IsolatedMarketContract {
         let config = Self::config(&env)?;
         let mut state = Self::state(&env)?;
 
-        let (assets, shares) = Self::resolve_assets_shares(
-            assets,
-            shares,
-            state.total_supply_assets,
-            state.total_supply_shares,
-        )?;
+        // Exactly one of assets/shares is specified. Round shares UP when assets
+        // are given so the withdrawer can never burn fewer shares than the value
+        // they remove (closes the free-withdrawal leak); round assets DOWN when
+        // shares are given so the pool is favored.
+        Self::require_one_input(assets, shares)?;
+        let (assets, shares) = if assets > 0 {
+            (
+                assets,
+                to_shares_up(assets, state.total_supply_assets, state.total_supply_shares),
+            )
+        } else {
+            (
+                to_assets_down(shares, state.total_supply_assets, state.total_supply_shares),
+                shares,
+            )
+        };
+        if assets <= 0 || shares <= 0 {
+            return Err(MarketError::InvalidAmount);
+        }
 
         let mut position = Self::position_or_empty(&env, &on_behalf);
         if position.supply_shares < shares {
@@ -366,7 +359,9 @@ impl IsolatedMarketContract {
         if assets > available {
             return Err(MarketError::InsufficientLiquidity);
         }
-        let shares = to_shares(assets, state.total_borrow_assets, state.total_borrow_shares);
+        // Mint debt shares rounded UP so a borrower never owes fewer shares than
+        // the assets they take.
+        let shares = to_shares_up(assets, state.total_borrow_assets, state.total_borrow_shares);
         if shares <= 0 {
             return Err(MarketError::InvalidAmount);
         }
@@ -410,16 +405,29 @@ impl IsolatedMarketContract {
             return Err(MarketError::InvalidAmount);
         }
 
-        let (mut assets, mut shares) = Self::resolve_assets_shares(
-            assets,
-            shares,
-            state.total_borrow_assets,
-            state.total_borrow_shares,
-        )?;
+        // Exactly one of assets/shares is specified. When assets are given,
+        // burn shares rounded DOWN (the payer does not over-reduce the debt-share
+        // pool); when shares are given, charge assets rounded UP. Both favor
+        // solvency.
+        Self::require_one_input(assets, shares)?;
+        let (mut assets, mut shares) = if assets > 0 {
+            (
+                assets,
+                to_shares_down(assets, state.total_borrow_assets, state.total_borrow_shares),
+            )
+        } else {
+            (
+                to_assets_up(shares, state.total_borrow_assets, state.total_borrow_shares),
+                shares,
+            )
+        };
         // Never repay more than the position owes.
         if shares > position.borrow_shares {
             shares = position.borrow_shares;
-            assets = to_assets(shares, state.total_borrow_assets, state.total_borrow_shares);
+            assets = to_assets_up(shares, state.total_borrow_assets, state.total_borrow_shares);
+        }
+        if assets <= 0 || shares <= 0 {
+            return Err(MarketError::InvalidAmount);
         }
 
         position.borrow_shares -= shares;
@@ -465,7 +473,7 @@ impl IsolatedMarketContract {
         if Self::health_factor_for_position(&env, &config, &state, &position)? >= WAD {
             return Err(MarketError::HealthFactorOk);
         }
-        let debt = to_assets(
+        let debt = to_assets_up(
             position.borrow_shares,
             state.total_borrow_assets,
             state.total_borrow_shares,
@@ -483,7 +491,7 @@ impl IsolatedMarketContract {
             return Err(MarketError::InsufficientCollateral);
         }
         let mut repaid_shares =
-            to_shares(actual, state.total_borrow_assets, state.total_borrow_shares);
+            to_shares_down(actual, state.total_borrow_assets, state.total_borrow_shares);
         if repaid_shares > position.borrow_shares {
             repaid_shares = position.borrow_shares;
         }
@@ -587,7 +595,7 @@ impl IsolatedMarketContract {
     /// Morpho model: borrower interest increases `total_borrow_assets`; lenders'
     /// claim (`total_supply_assets`) grows by that interest minus the protocol
     /// fee, which accrues to `fee_assets`. Multiply before dividing to avoid
-    /// truncating the rate (Step 3 will add compounding and checked arithmetic).
+    /// truncating the rate. Taylor-compounding is a possible later refinement.
     fn accrue_interest_internal(env: &Env) -> Result<(), MarketError> {
         let config = Self::config(env)?;
         let mut state = Self::state(env)?;
@@ -616,23 +624,15 @@ impl IsolatedMarketContract {
         Ok(())
     }
 
-    /// Resolve the (assets, shares) pair for a withdraw: exactly one input must
-    /// be positive; the other is derived from the supply pool totals.
-    fn resolve_assets_shares(
-        assets: i128,
-        shares: i128,
-        total_assets: i128,
-        total_shares: i128,
-    ) -> Result<(i128, i128), MarketError> {
+    /// Require exactly one of `assets`/`shares` to be positive. The caller picks
+    /// the rounding direction for the derived value, since withdraw and repay
+    /// round oppositely to favor the protocol.
+    fn require_one_input(assets: i128, shares: i128) -> Result<(), MarketError> {
         if (assets > 0) == (shares > 0) {
             // Both set or neither set.
             return Err(MarketError::InconsistentInput);
         }
-        if assets > 0 {
-            Ok((assets, to_shares(assets, total_assets, total_shares)))
-        } else {
-            Ok((to_assets(shares, total_assets, total_shares), shares))
-        }
+        Ok(())
     }
 
     fn validate_config(config: &IsolatedMarketConfig) -> Result<(), MarketError> {
@@ -718,7 +718,9 @@ impl IsolatedMarketContract {
         state: &IsolatedMarketState,
         position: &MarketPosition,
     ) -> Result<i128, MarketError> {
-        let debt = to_assets(
+        // Value debt by rounding shares -> assets UP, so health is never
+        // overstated.
+        let debt = to_assets_up(
             position.borrow_shares,
             state.total_borrow_assets,
             state.total_borrow_shares,
