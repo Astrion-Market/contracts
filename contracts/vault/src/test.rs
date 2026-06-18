@@ -23,6 +23,12 @@ enum MockGateKey {
     ReceiveShares(Address),
 }
 
+#[contracttype]
+#[derive(Clone)]
+enum MockRegistryKey {
+    Registered(Address),
+}
+
 #[contract]
 struct MockAdapter;
 
@@ -109,6 +115,25 @@ impl MockGate {
     }
 }
 
+#[contract]
+struct MockRegistry;
+
+#[contractimpl]
+impl MockRegistry {
+    pub fn set_registered(env: Env, adapter: Address, registered: bool) {
+        env.storage()
+            .persistent()
+            .set(&MockRegistryKey::Registered(adapter), &registered);
+    }
+
+    pub fn is_in_registry(env: Env, adapter: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get(&MockRegistryKey::Registered(adapter))
+            .unwrap_or(false)
+    }
+}
+
 struct Setup<'a> {
     env: Env,
     client: VaultContractClient<'a>,
@@ -185,6 +210,13 @@ fn set_gate(s: &Setup, gate: Symbol, address: Option<Address>) {
     s.client.set_gate(&gate, &address);
 }
 
+fn set_adapter_registry(s: &Setup, registry: Option<Address>) {
+    let action = symbol_short!("registry");
+    let args_hash = s.client.hash_adapter_registry_args(&registry);
+    s.client.submit(&s.owner, &action, &args_hash);
+    s.client.set_adapter_registry(&registry);
+}
+
 #[test]
 fn test_initialize_success() {
     let env = Env::default();
@@ -206,10 +238,35 @@ fn test_initialize_success() {
     assert_eq!(config.owner, owner);
     assert_eq!(config.asset, asset);
     assert_eq!(config.virtual_shares, 100_000_000_000);
+    assert_eq!(config.adapter_registry, None);
 
     let state = client.get_state().unwrap();
     assert_eq!(state.total_assets, 0);
     assert_eq!(state.total_shares, 0);
+}
+
+#[test]
+fn test_adapter_registry_gates_new_adapters() {
+    let s = setup();
+    let registry = s.env.register(MockRegistry, ());
+    let adapter = s.env.register(MockAdapter, ());
+    MockAdapterClient::new(&s.env, &adapter).initialize(&s.asset);
+
+    set_adapter_registry(&s, Some(registry.clone()));
+    let action = symbol_short!("adapter");
+    let args_hash = s.client.hash_adapter_args(&adapter, &true);
+    s.client.submit(&s.owner, &action, &args_hash);
+    let result = s.client.try_set_adapter(&adapter, &true);
+    assert_eq!(
+        result,
+        Err(Ok(crate::errors::VaultError::AdapterNotInRegistry))
+    );
+
+    MockRegistryClient::new(&s.env, &registry).set_registered(&adapter, &true);
+    s.client.set_adapter(&adapter, &true);
+
+    assert!(s.client.is_adapter(&adapter));
+    assert_eq!(s.client.adapter_registry(), Some(registry));
 }
 
 #[test]

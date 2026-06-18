@@ -56,6 +56,11 @@ pub trait VaultGate {
     fn can_send_assets(env: Env, account: Address) -> bool;
 }
 
+#[contractclient(name = "AdapterRegistryClient")]
+pub trait AdapterRegistry {
+    fn is_in_registry(env: Env, adapter: Address) -> bool;
+}
+
 #[contract]
 pub struct VaultContract;
 
@@ -93,6 +98,7 @@ impl VaultContract {
                 receive_assets: None,
                 send_assets: None,
             },
+            adapter_registry: None,
         };
         let state = VaultState {
             total_assets: 0,
@@ -166,6 +172,10 @@ impl VaultContract {
         read_liquidity_data(&env)
     }
 
+    pub fn adapter_registry(env: Env) -> Option<Address> {
+        read_config(&env).and_then(|c| c.adapter_registry)
+    }
+
     pub fn timelock(env: Env, action: Symbol) -> u64 {
         read_timelock(&env, &action)
     }
@@ -213,6 +223,10 @@ impl VaultContract {
 
     pub fn hash_gate_args(env: Env, gate: Symbol, address: Option<Address>) -> BytesN<32> {
         hash_gate_args(&env, &gate, &address)
+    }
+
+    pub fn hash_adapter_registry_args(env: Env, registry: Option<Address>) -> BytesN<32> {
+        hash_adapter_registry_args(&env, &registry)
     }
 
     pub fn is_abdicated(env: Env, action: Symbol) -> bool {
@@ -384,6 +398,14 @@ impl VaultContract {
     pub fn set_adapter(env: Env, adapter: Address, enabled: bool) -> Result<(), VaultError> {
         let args_hash = hash_adapter_args(&env, &adapter, enabled);
         Self::accept(&env, &symbol_short!("adapter"), &args_hash)?;
+        let config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        if enabled {
+            if let Some(registry) = config.adapter_registry {
+                if !AdapterRegistryClient::new(&env, &registry).is_in_registry(&adapter) {
+                    return Err(VaultError::AdapterNotInRegistry);
+                }
+            }
+        }
         let mut adapters = read_adapters(&env);
         let exists = adapters.iter().any(|a| a == adapter);
         if enabled && !exists {
@@ -402,6 +424,16 @@ impl VaultContract {
         write_adapters(&env, &adapters);
         env.events()
             .publish((symbol_short!("adapter"), adapter), enabled);
+        Ok(())
+    }
+
+    pub fn set_adapter_registry(env: Env, registry: Option<Address>) -> Result<(), VaultError> {
+        let args_hash = hash_adapter_registry_args(&env, &registry);
+        Self::accept(&env, &symbol_short!("registry"), &args_hash)?;
+        let mut config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        config.adapter_registry = registry.clone();
+        write_config(&env, &config);
+        env.events().publish((symbol_short!("registry"),), registry);
         Ok(())
     }
 
@@ -1273,5 +1305,11 @@ fn hash_liquidity_args(env: &Env, adapter: &Option<Address>, data: &Bytes) -> By
 fn hash_gate_args(env: &Env, gate: &Symbol, address: &Option<Address>) -> BytesN<32> {
     env.crypto()
         .sha256(&(gate.clone(), address.clone()).to_xdr(env))
+        .to_bytes()
+}
+
+fn hash_adapter_registry_args(env: &Env, registry: &Option<Address>) -> BytesN<32> {
+    env.crypto()
+        .sha256(&registry.clone().to_xdr(env))
         .to_bytes()
 }

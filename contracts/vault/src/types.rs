@@ -41,6 +41,9 @@ pub struct VaultConfig {
     /// Maximum share-price growth rate per second, WAD-scaled.
     pub max_rate: i128,
     pub gates: GateConfig,
+    /// Optional adapter registry. When present, newly enabled adapters must be
+    /// registered there; `None` means the vault opts out.
+    pub adapter_registry: Option<Address>,
 }
 
 #[contracttype]

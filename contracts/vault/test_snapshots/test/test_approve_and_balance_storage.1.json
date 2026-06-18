@@ -162,6 +162,12 @@
                         "map": [
                           {
                             "key": {
+                              "symbol": "adapter_registry"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "asset"
                             },
                             "val": {

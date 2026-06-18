@@ -29,4 +29,5 @@ pub enum VaultError {
     CapExceeded = 41,
     InvalidCap = 42,
     GateRejected = 43,
+    AdapterNotInRegistry = 44,
 }
