@@ -10,8 +10,7 @@ use soroban_sdk::{
 use astrion_math::WAD;
 
 use crate::{
-    errors::MarketError, IsolatedMarketConfig, IsolatedMarketContract,
-    IsolatedMarketContractClient,
+    errors::MarketError, IsolatedMarketConfig, IsolatedMarketContract, IsolatedMarketContractClient,
 };
 
 // ---------------------------------------------------------------------------
@@ -203,8 +202,8 @@ fn test_initialize_invalid_config_fails() {
 
     let market_id = env.register(IsolatedMarketContract, ());
     // lltv == WAD (100%) is out of range — invalid
-    let result = IsolatedMarketContractClient::new(&env, &market_id).try_initialize(
-        &IsolatedMarketConfig {
+    let result =
+        IsolatedMarketContractClient::new(&env, &market_id).try_initialize(&IsolatedMarketConfig {
             collateral_asset: collateral,
             loan_asset: loan,
             oracle_adapter: oracle_id,
@@ -215,8 +214,7 @@ fn test_initialize_invalid_config_fails() {
             borrow_cap: 0,
             rate_model: rate_model_id,
             treasury,
-        },
-    );
+        });
     assert_eq!(result, Err(Ok(MarketError::InvalidAmount)));
 }
 
@@ -387,7 +385,10 @@ fn test_withdraw_tiny_amount_burns_shares() {
     let before = m.get_user_position(&lender).unwrap().supply_shares;
     m.withdraw(&lender, &1_i128, &0_i128, &lender, &lender);
     let after = m.get_user_position(&lender).unwrap().supply_shares;
-    assert!(after < before, "tiny withdrawal must burn shares, not be free");
+    assert!(
+        after < before,
+        "tiny withdrawal must burn shares, not be free"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -409,7 +410,10 @@ fn test_supply_collateral_basic() {
     let pos = m.get_user_position(&borrower).unwrap();
     assert_eq!(pos.collateral, 1_000);
     assert_eq!(pos.supply_shares, 0);
-    assert_eq!(token::Client::new(&env, &s.collateral).balance(&borrower), 0);
+    assert_eq!(
+        token::Client::new(&env, &s.collateral).balance(&borrower),
+        0
+    );
     assert_eq!(m.get_market_state().unwrap().total_collateral, 1_000);
 }
 
@@ -686,7 +690,14 @@ fn test_liquidate_healthy_position_fails() {
     let liquidator = Address::generate(&env);
     mint_loan(&env, &s, &liquidator, 50);
     // seized=0, repay 1 share — gate should reject on health, not inputs.
-    let result = m.try_liquidate(&liquidator, &borrower, &0_i128, &1_i128, &0_i128, &NO_DEADLINE);
+    let result = m.try_liquidate(
+        &liquidator,
+        &borrower,
+        &0_i128,
+        &1_i128,
+        &0_i128,
+        &NO_DEADLINE,
+    );
     assert_eq!(result, Err(Ok(MarketError::HealthFactorOk)));
 }
 
@@ -710,8 +721,14 @@ fn test_liquidate_full_repay_by_shares() {
     let liquidator = Address::generate(&env);
     mint_loan(&env, &s, &liquidator, 100);
 
-    let (seized, repaid) =
-        m.liquidate(&liquidator, &borrower, &0_i128, &shares, &0_i128, &NO_DEADLINE);
+    let (seized, repaid) = m.liquidate(
+        &liquidator,
+        &borrower,
+        &0_i128,
+        &shares,
+        &0_i128,
+        &NO_DEADLINE,
+    );
 
     assert!(seized > 0 && seized < 1_000);
     assert_eq!(repaid, 70);
@@ -742,8 +759,14 @@ fn test_liquidate_by_seized_assets() {
     mint_loan(&env, &s, &liquidator, 100);
 
     // Seize exactly 400 collateral; repaid debt is derived.
-    let (seized, repaid) =
-        m.liquidate(&liquidator, &borrower, &400_i128, &0_i128, &0_i128, &NO_DEADLINE);
+    let (seized, repaid) = m.liquidate(
+        &liquidator,
+        &borrower,
+        &400_i128,
+        &0_i128,
+        &0_i128,
+        &NO_DEADLINE,
+    );
 
     assert_eq!(seized, 400);
     assert!(repaid > 0 && repaid < 70);
@@ -789,8 +812,14 @@ fn test_liquidate_slippage_exceeded() {
     mint_loan(&env, &s, &liquidator, 100);
 
     // Demand far more collateral than the incentive yields.
-    let result =
-        m.try_liquidate(&liquidator, &borrower, &0_i128, &shares, &10_000_i128, &NO_DEADLINE);
+    let result = m.try_liquidate(
+        &liquidator,
+        &borrower,
+        &0_i128,
+        &shares,
+        &10_000_i128,
+        &NO_DEADLINE,
+    );
     assert_eq!(result, Err(Ok(MarketError::SlippageExceeded)));
 }
 
@@ -815,7 +844,14 @@ fn test_liquidate_bad_debt_socialized() {
     mint_loan(&env, &s, &liquidator, 100);
 
     // Seize all collateral.
-    m.liquidate(&liquidator, &borrower, &1_000_i128, &0_i128, &0_i128, &NO_DEADLINE);
+    m.liquidate(
+        &liquidator,
+        &borrower,
+        &1_000_i128,
+        &0_i128,
+        &0_i128,
+        &NO_DEADLINE,
+    );
 
     // Borrower wiped out, residual debt written off.
     let pos = m.get_user_position(&borrower).unwrap();
@@ -842,12 +878,22 @@ fn test_bad_debt_lowers_lender_share_price() {
     oracle.set_price(&s.collateral, &(WAD / 2));
     let liquidator = Address::generate(&env);
     mint_loan(&env, &s, &liquidator, 100);
-    m.liquidate(&liquidator, &borrower, &1_000_i128, &0_i128, &0_i128, &NO_DEADLINE);
+    m.liquidate(
+        &liquidator,
+        &borrower,
+        &1_000_i128,
+        &0_i128,
+        &0_i128,
+        &NO_DEADLINE,
+    );
 
     // The lender redeems all shares and recovers less than the 1000 deposited.
     let shares = m.get_user_position(&lender).unwrap().supply_shares;
     let (assets, _) = m.withdraw(&lender, &0_i128, &shares, &lender, &lender);
-    assert!(assets < 1_000, "bad debt must reduce lender redemption value");
+    assert!(
+        assets < 1_000,
+        "bad debt must reduce lender redemption value"
+    );
 }
 
 // ---------------------------------------------------------------------------

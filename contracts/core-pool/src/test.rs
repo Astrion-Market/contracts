@@ -75,11 +75,7 @@ mod mock_rate_model {
 
     #[contractimpl]
     impl MockRateModel {
-        pub fn get_rates(
-            _env: Env,
-            _total_borrowed: i128,
-            _total_supplied: i128,
-        ) -> RateSnapshot {
+        pub fn get_rates(_env: Env, _total_borrowed: i128, _total_supplied: i128) -> RateSnapshot {
             RateSnapshot {
                 borrow_rate: astrion_math::WAD * 5 / 100,
                 supply_rate: astrion_math::WAD * 4 / 100,

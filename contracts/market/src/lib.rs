@@ -40,6 +40,7 @@ mod errors;
 #[cfg(test)]
 mod test;
 
+pub use astrion_market_types::{IsolatedMarketConfig, IsolatedMarketState, MarketPosition};
 use astrion_math::{
     health_factor, to_assets_down, to_assets_up, to_shares_down, to_shares_up, wad_div, wad_mul,
     zero_floor_sub, WAD,
@@ -48,7 +49,6 @@ use errors::MarketError;
 use soroban_sdk::{
     contract, contractclient, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
 };
-pub use astrion_market_types::{IsolatedMarketConfig, IsolatedMarketState, MarketPosition};
 
 // ---------------------------------------------------------------------------
 // Storage
@@ -552,20 +552,29 @@ impl IsolatedMarketContract {
             let seized_value = wad_mul(seized_assets, price_collateral);
             let repaid_value = wad_div(seized_value, lif);
             let repaid_assets = wad_div(repaid_value, price_loan);
-            let shares =
-                to_shares_up(repaid_assets, state.total_borrow_assets, state.total_borrow_shares);
+            let shares = to_shares_up(
+                repaid_assets,
+                state.total_borrow_assets,
+                state.total_borrow_shares,
+            );
             (seized_assets, shares)
         } else {
-            let repaid_assets =
-                to_assets_down(repaid_shares, state.total_borrow_assets, state.total_borrow_shares);
+            let repaid_assets = to_assets_down(
+                repaid_shares,
+                state.total_borrow_assets,
+                state.total_borrow_shares,
+            );
             let repaid_value = wad_mul(repaid_assets, price_loan);
             let seized_value = wad_mul(repaid_value, lif);
             let seized = wad_div(seized_value, price_collateral);
             (seized, repaid_shares)
         };
         // What the liquidator actually pays in loan assets (rounded up).
-        let repaid_assets =
-            to_assets_up(repaid_shares, state.total_borrow_assets, state.total_borrow_shares);
+        let repaid_assets = to_assets_up(
+            repaid_shares,
+            state.total_borrow_assets,
+            state.total_borrow_shares,
+        );
 
         if repaid_shares <= 0 || repaid_shares > position.borrow_shares {
             return Err(MarketError::InvalidAmount);
@@ -709,8 +718,11 @@ impl IsolatedMarketContract {
             repaid_assets = wad_div(supported_value, price_loan);
             bad_debt_assets = zero_floor_sub(debt_assets, repaid_assets);
         }
-        let repaid_shares =
-            to_shares_down(repaid_assets, state.total_borrow_assets, state.total_borrow_shares);
+        let repaid_shares = to_shares_down(
+            repaid_assets,
+            state.total_borrow_assets,
+            state.total_borrow_shares,
+        );
 
         Ok(LiquidationPreview {
             liquidatable: true,
@@ -920,7 +932,10 @@ impl IsolatedMarketContract {
         if debt == 0 {
             return Ok(i128::MAX);
         }
-        let collateral_value = wad_mul(position.collateral, Self::price(env, &config.collateral_asset)?);
+        let collateral_value = wad_mul(
+            position.collateral,
+            Self::price(env, &config.collateral_asset)?,
+        );
         let debt_value = wad_mul(debt, Self::price(env, &config.loan_asset)?);
         Ok(health_factor(collateral_value, config.lltv, debt_value))
     }

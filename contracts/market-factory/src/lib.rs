@@ -32,8 +32,8 @@ mod test;
 
 use astrion_market_types::IsolatedMarketConfig;
 use soroban_sdk::{
-    contract, contractclient, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, BytesN,
-    Env, Vec,
+    contract, contractclient, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address,
+    BytesN, Env, Vec,
 };
 
 /// Client trait for calling the deployed market's `initialize`. Declared here
@@ -143,10 +143,7 @@ impl MarketFactoryContract {
     /// `(loan_asset, collateral_asset, oracle, irm, lltv)`, so markets with the
     /// same pair but different oracle/IRM/LLTV — and the reverse direction — are
     /// distinct. Returns the market address.
-    pub fn create_market(
-        env: Env,
-        config: IsolatedMarketConfig,
-    ) -> Result<Address, FactoryError> {
+    pub fn create_market(env: Env, config: IsolatedMarketConfig) -> Result<Address, FactoryError> {
         require_initialized(&env)?;
         if config.loan_asset == config.collateral_asset {
             return Err(FactoryError::InvalidMarketParams);
