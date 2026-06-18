@@ -851,6 +851,78 @@ fn test_bad_debt_lowers_lender_share_price() {
 }
 
 // ---------------------------------------------------------------------------
+// Preview liquidate
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_preview_liquidate_healthy_not_liquidatable() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+
+    let preview = m.preview_liquidate(&borrower, &70_i128);
+    assert!(!preview.liquidatable);
+    assert_eq!(preview.seized_collateral, 0);
+}
+
+#[test]
+fn test_preview_liquidate_matches_execution() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+    let oracle = MockOracleClient::new(&env, &s.oracle_id);
+
+    lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+    oracle.set_price(&s.collateral, &(WAD * 85 / 100));
+
+    let preview = m.preview_liquidate(&borrower, &70_i128);
+    assert!(preview.liquidatable);
+    assert_eq!(preview.bad_debt_assets, 0);
+
+    // Execute by the previewed repaid shares; seized should match within rounding.
+    let liquidator = Address::generate(&env);
+    mint_loan(&env, &s, &liquidator, 100);
+    let (seized, _) = m.liquidate(
+        &liquidator,
+        &borrower,
+        &0_i128,
+        &preview.repaid_shares,
+        &0_i128,
+        &NO_DEADLINE,
+    );
+    assert!((seized - preview.seized_collateral).abs() <= 1);
+}
+
+#[test]
+fn test_preview_liquidate_flags_bad_debt() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+    let oracle = MockOracleClient::new(&env, &s.oracle_id);
+
+    lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+
+    // Deep crash: repaying the full debt would need more collateral than exists.
+    oracle.set_price(&s.collateral, &(WAD / 2));
+    let preview = m.preview_liquidate(&borrower, &70_i128);
+
+    assert!(preview.liquidatable);
+    assert_eq!(preview.seized_collateral, 1_000); // capped at collateral
+    assert!(preview.bad_debt_assets > 0);
+}
+
+// ---------------------------------------------------------------------------
 // Interest accrual
 // ---------------------------------------------------------------------------
 

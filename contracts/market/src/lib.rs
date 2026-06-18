@@ -21,14 +21,15 @@
 //! - Interest accrual increases `total_borrow_assets`; lenders' claim grows by
 //!   the borrower interest minus the protocol fee.
 //!
-//! ## Implementation status: STEP 3 (hardened share accounting)
+//! ## Implementation status: STEP 4 (Morpho liquidation + bad debt)
 //!
-//! This crate is mid-port. Steps 2–3 implement the lender pool, borrower
+//! This crate is mid-port. Steps 2–4 implement the lender pool, borrower
 //! collateral, borrow/repay, and liquidation on Morpho share accounting with
 //! virtual shares and conservative, solvency-favoring rounding (deposits down,
-//! withdrawals/borrows up, debt valuation up). Arithmetic traps on overflow.
-//! Morpho's no-close-factor liquidation with bad-debt socialization is Step 4;
-//! operator authorization is Step 6.
+//! withdrawals/borrows up, debt valuation up). Liquidation uses Morpho's
+//! incentive factor with no close factor, socializes bad debt at liquidation
+//! time, and exposes `preview_liquidate` for bots. Arithmetic traps on overflow.
+//! Operator authorization is Step 6.
 
 #![no_std]
 #![allow(deprecated)]
@@ -92,6 +93,24 @@ pub struct RateSnapshot {
     pub borrow_rate: i128,
     pub supply_rate: i128,
     pub utilization: i128,
+}
+
+/// Read-only projection of a liquidation, for off-chain liquidator bots.
+/// Computed on current stored state — callers should `accrue_interest` first for
+/// freshness. Treat `bad_debt_assets` as an estimate until confirmed on-chain.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct LiquidationPreview {
+    /// Whether the position is currently liquidatable.
+    pub liquidatable: bool,
+    /// Loan assets the liquidator would pay for the previewed `repay_assets`.
+    pub repaid_assets: i128,
+    /// Borrow shares that would be repaid.
+    pub repaid_shares: i128,
+    /// Collateral the liquidator would receive (capped at the position).
+    pub seized_collateral: i128,
+    /// Residual debt that would be socialized as bad debt (0 if none).
+    pub bad_debt_assets: i128,
 }
 
 #[contractclient(name = "OracleAdapterClient")]
@@ -605,6 +624,66 @@ impl IsolatedMarketContract {
         let state = Self::state(&env)?;
         let position = Self::position_or_empty(&env, &user);
         Self::health_factor_for_position(&env, &config, &state, &position)
+    }
+
+    /// Project the outcome of liquidating `borrower` while repaying up to
+    /// `repay_assets` of loan assets. Read-only; computed on current stored
+    /// state (call `accrue_interest` first for a fresh result).
+    pub fn preview_liquidate(
+        env: Env,
+        borrower: Address,
+        repay_assets: i128,
+    ) -> Result<LiquidationPreview, MarketError> {
+        let config = Self::config(&env)?;
+        let state = Self::state(&env)?;
+        let position = Self::position_or_empty(&env, &borrower);
+
+        let liquidatable =
+            Self::health_factor_for_position(&env, &config, &state, &position)? < WAD;
+        let debt_assets = to_assets_up(
+            position.borrow_shares,
+            state.total_borrow_assets,
+            state.total_borrow_shares,
+        );
+        if !liquidatable || debt_assets <= 0 || repay_assets <= 0 {
+            return Ok(LiquidationPreview {
+                liquidatable,
+                repaid_assets: 0,
+                repaid_shares: 0,
+                seized_collateral: 0,
+                bad_debt_assets: 0,
+            });
+        }
+
+        let lif = Self::liquidation_incentive_factor(config.lltv);
+        let price_collateral = Self::price(&env, &config.collateral_asset)?;
+        let price_loan = Self::price(&env, &config.loan_asset)?;
+
+        let want = if repay_assets < debt_assets {
+            repay_assets
+        } else {
+            debt_assets
+        };
+        let mut repaid_assets = want;
+        let mut seized = wad_div(wad_mul(wad_mul(want, price_loan), lif), price_collateral);
+        let mut bad_debt_assets = 0;
+        if seized >= position.collateral {
+            // Collateral-limited: all collateral seized, residual is bad debt.
+            seized = position.collateral;
+            let supported_value = wad_div(wad_mul(seized, price_collateral), lif);
+            repaid_assets = wad_div(supported_value, price_loan);
+            bad_debt_assets = zero_floor_sub(debt_assets, repaid_assets);
+        }
+        let repaid_shares =
+            to_shares_down(repaid_assets, state.total_borrow_assets, state.total_borrow_shares);
+
+        Ok(LiquidationPreview {
+            liquidatable: true,
+            repaid_assets,
+            repaid_shares,
+            seized_collateral: seized,
+            bad_debt_assets,
+        })
     }
 
     pub fn get_user_position(env: Env, user: Address) -> Option<MarketPosition> {
