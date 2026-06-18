@@ -26,6 +26,7 @@
       ]
     ],
     [],
+    [],
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
@@ -64,7 +65,7 @@
                   "symbol": "abdicate"
                 },
                 {
-                  "bytes": "0303030303030303030303030303030303030303030303030303030303030303"
+                  "bytes": "5bccc36c0e7a93a09dcbd3f90ddf6414f5e2d4a9efd309936eb9a5117a73fe0c"
                 }
               ]
             }

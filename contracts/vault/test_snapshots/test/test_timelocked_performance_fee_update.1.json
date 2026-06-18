@@ -26,6 +26,7 @@
       ]
     ],
     [],
+    [],
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
@@ -64,7 +65,7 @@
                   "symbol": "perf_fee"
                 },
                 {
-                  "bytes": "0505050505050505050505050505050505050505050505050505050505050505"
+                  "bytes": "b810bb77f642add3aa45c582ba09c28f15e29dac2bd066980c55098092ce715d"
                 }
               ]
             }

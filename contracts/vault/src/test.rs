@@ -3,8 +3,9 @@
 extern crate std;
 
 use soroban_sdk::{
+    symbol_short,
     testutils::{Address as _, Ledger},
-    symbol_short, token, Address, BytesN, Env, String,
+    token, Address, BytesN, Env, String,
 };
 
 use crate::{VaultContract, VaultContractClient};
@@ -31,7 +32,6 @@ fn setup<'a>() -> Setup<'a> {
         &asset,
         &String::from_str(&env, "Astrion USDC Vault"),
         &String::from_str(&env, "asUSDC"),
-        &7,
     );
     Setup {
         env,
@@ -57,13 +57,14 @@ fn test_initialize_success() {
     let client = VaultContractClient::new(&env, &vault_id);
 
     let owner = Address::generate(&env);
-    let asset = Address::generate(&env);
+    let asset = env
+        .register_stellar_asset_contract_v2(owner.clone())
+        .address();
     client.initialize(
         &owner,
         &asset,
         &String::from_str(&env, "Astrion USDC Vault"),
         &String::from_str(&env, "asUSDC"),
-        &7,
     );
 
     let config = client.get_config().unwrap();
@@ -161,9 +162,7 @@ fn test_accrual_caps_donation_gain_by_max_rate() {
 
     // Donation: real assets become 10_100, but max_rate is 200% APR.
     mint_asset(&s.env, &s.asset, &s.vault_id, 10_000);
-    s.env
-        .ledger()
-        .with_mut(|li| li.timestamp = 31_536_000);
+    s.env.ledger().with_mut(|li| li.timestamp = 31_536_000);
 
     let preview = s.client.accrue_interest_view();
     assert_eq!(preview.new_total_assets, 299);
@@ -195,18 +194,47 @@ fn test_timelocked_allocator_execution() {
     let curator = Address::generate(&s.env);
     let allocator = Address::generate(&s.env);
     let action = symbol_short!("alloc");
-    let args_hash = hash(&s.env, 1);
+    let args_hash = s.client.hash_allocator_args(&allocator, &true);
 
     s.client.set_curator(&s.owner, &curator);
     s.client.set_timelock(&s.owner, &action, &10);
     assert_eq!(s.client.submit(&curator, &action, &args_hash), 10);
 
-    let early = s.client.try_set_allocator(&allocator, &true, &args_hash);
-    assert_eq!(early, Err(Ok(crate::errors::VaultError::TimelockNotExpired)));
+    let early = s.client.try_set_allocator(&allocator, &true);
+    assert_eq!(
+        early,
+        Err(Ok(crate::errors::VaultError::TimelockNotExpired))
+    );
 
     s.env.ledger().with_mut(|li| li.timestamp = 10);
-    s.client.set_allocator(&allocator, &true, &args_hash);
+    s.client.set_allocator(&allocator, &true);
     assert!(s.client.is_allocator(&allocator));
+    assert!(s.client.executable_at(&action, &args_hash).is_none());
+}
+
+#[test]
+fn test_timelock_rejects_allocator_arg_substitution() {
+    let s = setup();
+    let curator = Address::generate(&s.env);
+    let intended = Address::generate(&s.env);
+    let attacker = Address::generate(&s.env);
+    let action = symbol_short!("alloc");
+    let args_hash = s.client.hash_allocator_args(&intended, &true);
+
+    s.client.set_curator(&s.owner, &curator);
+    s.client.submit(&curator, &action, &args_hash);
+
+    let substituted = s.client.try_set_allocator(&attacker, &true);
+    assert_eq!(
+        substituted,
+        Err(Ok(crate::errors::VaultError::DataNotTimelocked))
+    );
+    assert!(!s.client.is_allocator(&attacker));
+    assert!(s.client.executable_at(&action, &args_hash).is_some());
+
+    s.client.set_allocator(&intended, &true);
+    assert!(s.client.is_allocator(&intended));
+    assert!(!s.client.is_allocator(&attacker));
     assert!(s.client.executable_at(&action, &args_hash).is_none());
 }
 
@@ -232,11 +260,11 @@ fn test_abdication_blocks_future_submit() {
     let curator = Address::generate(&s.env);
     let target = symbol_short!("alloc");
     let abdicate = symbol_short!("abdicate");
-    let args_hash = hash(&s.env, 3);
+    let args_hash = s.client.hash_abdicate_args(&target);
 
     s.client.set_curator(&s.owner, &curator);
     s.client.submit(&curator, &abdicate, &args_hash);
-    s.client.abdicate(&target, &args_hash);
+    s.client.abdicate(&target);
 
     assert!(s.client.is_abdicated(&target));
     let blocked = s.client.try_submit(&curator, &target, &hash(&s.env, 4));
@@ -249,14 +277,24 @@ fn test_timelocked_performance_fee_update() {
     let curator = Address::generate(&s.env);
     let recipient = Address::generate(&s.env);
     let action = symbol_short!("perf_fee");
-    let args_hash = hash(&s.env, 5);
+    let args_hash = s
+        .client
+        .hash_performance_fee_args(&(astrion_math::WAD / 10), &recipient);
 
     s.client.set_curator(&s.owner, &curator);
     s.client.submit(&curator, &action, &args_hash);
     s.client
-        .set_performance_fee(&(astrion_math::WAD / 10), &recipient, &args_hash);
+        .set_performance_fee(&(astrion_math::WAD / 10), &recipient);
 
     let config = s.client.get_config().unwrap();
     assert_eq!(config.performance_fee, astrion_math::WAD / 10);
     assert_eq!(config.performance_fee_recipient, recipient);
+}
+
+#[test]
+fn test_convert_zero_returns_zero() {
+    let s = setup();
+
+    assert_eq!(s.client.convert_to_shares(&0), 0);
+    assert_eq!(s.client.convert_to_assets(&0), 0);
 }

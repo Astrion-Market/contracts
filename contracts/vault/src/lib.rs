@@ -8,20 +8,19 @@ mod types;
 #[cfg(test)]
 mod test;
 
-use errors::VaultError;
 use astrion_math::{mul_div_down, mul_div_up};
-use storage::{
-    clear_pending, executable_at as read_executable_at,
-    allowance as read_allowance, balance as read_balance, get_config as read_config,
-    get_state as read_state, is_abdicated, is_allocator as read_is_allocator,
-    is_initialized, is_locked, is_sentinel as read_is_sentinel, set_abdicated,
-    set_allocator as write_allocator, set_allowance as write_allowance,
-    set_balance as write_balance, set_config as write_config, set_initialized, set_locked,
-    set_pending, set_sentinel as write_sentinel, set_state as write_state,
-    set_timelock as write_timelock, timelock as read_timelock,
-};
+use errors::VaultError;
 use soroban_sdk::{
-    contract, contractimpl, symbol_short, token, Address, BytesN, Env, String, Symbol,
+    contract, contractimpl, symbol_short, token, xdr::ToXdr, Address, BytesN, Env, String, Symbol,
+};
+use storage::{
+    allowance as read_allowance, balance as read_balance, clear_pending,
+    executable_at as read_executable_at, get_config as read_config, get_state as read_state,
+    is_abdicated, is_allocator as read_is_allocator, is_initialized, is_locked,
+    is_sentinel as read_is_sentinel, set_abdicated, set_allocator as write_allocator,
+    set_allowance as write_allowance, set_balance as write_balance, set_config as write_config,
+    set_initialized, set_locked, set_pending, set_sentinel as write_sentinel,
+    set_state as write_state, set_timelock as write_timelock, timelock as read_timelock,
 };
 use types::{AccrualPreview, VaultConfig, VaultState};
 
@@ -36,12 +35,12 @@ impl VaultContract {
         asset: Address,
         name: String,
         symbol: String,
-        decimals: u32,
     ) -> Result<(), VaultError> {
         if is_initialized(&env) {
             return Err(VaultError::AlreadyInitialized);
         }
 
+        let decimals = token::Client::new(&env, &asset).decimals();
         let virtual_shares = pow10(18u32.saturating_sub(decimals));
         let config = VaultConfig {
             owner: owner.clone(),
@@ -109,6 +108,26 @@ impl VaultContract {
         read_executable_at(&env, &action, &args_hash)
     }
 
+    pub fn hash_allocator_args(env: Env, account: Address, enabled: bool) -> BytesN<32> {
+        hash_allocator_args(&env, &account, enabled)
+    }
+
+    pub fn hash_performance_fee_args(env: Env, fee: i128, recipient: Address) -> BytesN<32> {
+        hash_fee_args(&env, fee, &recipient)
+    }
+
+    pub fn hash_management_fee_args(env: Env, fee: i128, recipient: Address) -> BytesN<32> {
+        hash_fee_args(&env, fee, &recipient)
+    }
+
+    pub fn hash_max_rate_args(env: Env, rate: i128) -> BytesN<32> {
+        hash_max_rate_args(&env, rate)
+    }
+
+    pub fn hash_abdicate_args(env: Env, action: Symbol) -> BytesN<32> {
+        hash_abdicate_args(&env, &action)
+    }
+
     pub fn is_abdicated(env: Env, action: Symbol) -> bool {
         is_abdicated(&env, &action)
     }
@@ -127,11 +146,7 @@ impl VaultContract {
         Ok(())
     }
 
-    pub fn set_curator(
-        env: Env,
-        owner: Address,
-        new_curator: Address,
-    ) -> Result<(), VaultError> {
+    pub fn set_curator(env: Env, owner: Address, new_curator: Address) -> Result<(), VaultError> {
         owner.require_auth();
         let mut config = read_config(&env).ok_or(VaultError::NotInitialized)?;
         if owner != config.owner {
@@ -197,8 +212,10 @@ impl VaultContract {
         }
         let executable_at = env.ledger().timestamp() + read_timelock(&env, &action);
         set_pending(&env, &action, &args_hash, executable_at);
-        env.events()
-            .publish((symbol_short!("submit"), action), (args_hash.clone(), executable_at));
+        env.events().publish(
+            (symbol_short!("submit"), action),
+            (args_hash.clone(), executable_at),
+        );
         Ok(executable_at)
     }
 
@@ -222,12 +239,8 @@ impl VaultContract {
         Ok(())
     }
 
-    pub fn set_allocator(
-        env: Env,
-        account: Address,
-        enabled: bool,
-        args_hash: BytesN<32>,
-    ) -> Result<(), VaultError> {
+    pub fn set_allocator(env: Env, account: Address, enabled: bool) -> Result<(), VaultError> {
+        let args_hash = hash_allocator_args(&env, &account, enabled);
         Self::accept(&env, &symbol_short!("alloc"), &args_hash)?;
         write_allocator(&env, &account, enabled);
         env.events()
@@ -235,15 +248,11 @@ impl VaultContract {
         Ok(())
     }
 
-    pub fn set_performance_fee(
-        env: Env,
-        fee: i128,
-        recipient: Address,
-        args_hash: BytesN<32>,
-    ) -> Result<(), VaultError> {
-        if fee < 0 || fee > MAX_PERFORMANCE_FEE {
+    pub fn set_performance_fee(env: Env, fee: i128, recipient: Address) -> Result<(), VaultError> {
+        if !(0..=MAX_PERFORMANCE_FEE).contains(&fee) {
             return Err(VaultError::FeeTooHigh);
         }
+        let args_hash = hash_fee_args(&env, fee, &recipient);
         Self::accept(&env, &symbol_short!("perf_fee"), &args_hash)?;
         Self::accrue_interest_internal(&env)?;
         let mut config = read_config(&env).ok_or(VaultError::NotInitialized)?;
@@ -255,15 +264,11 @@ impl VaultContract {
         Ok(())
     }
 
-    pub fn set_management_fee(
-        env: Env,
-        fee: i128,
-        recipient: Address,
-        args_hash: BytesN<32>,
-    ) -> Result<(), VaultError> {
-        if fee < 0 || fee > MAX_MANAGEMENT_FEE {
+    pub fn set_management_fee(env: Env, fee: i128, recipient: Address) -> Result<(), VaultError> {
+        if !(0..=MAX_MANAGEMENT_FEE).contains(&fee) {
             return Err(VaultError::FeeTooHigh);
         }
+        let args_hash = hash_fee_args(&env, fee, &recipient);
         Self::accept(&env, &symbol_short!("mgmt_fee"), &args_hash)?;
         Self::accrue_interest_internal(&env)?;
         let mut config = read_config(&env).ok_or(VaultError::NotInitialized)?;
@@ -275,29 +280,25 @@ impl VaultContract {
         Ok(())
     }
 
-    pub fn set_max_rate(env: Env, rate: i128, args_hash: BytesN<32>) -> Result<(), VaultError> {
+    pub fn set_max_rate(env: Env, rate: i128) -> Result<(), VaultError> {
         if !(0..=MAX_MAX_RATE).contains(&rate) {
             return Err(VaultError::RateTooHigh);
         }
+        let args_hash = hash_max_rate_args(&env, rate);
         Self::accept(&env, &symbol_short!("max_rate"), &args_hash)?;
         Self::accrue_interest_internal(&env)?;
         let mut config = read_config(&env).ok_or(VaultError::NotInitialized)?;
         config.max_rate = rate;
         write_config(&env, &config);
-        env.events()
-            .publish((symbol_short!("max_rate"),), rate);
+        env.events().publish((symbol_short!("max_rate"),), rate);
         Ok(())
     }
 
-    pub fn abdicate(
-        env: Env,
-        action: Symbol,
-        args_hash: BytesN<32>,
-    ) -> Result<(), VaultError> {
+    pub fn abdicate(env: Env, action: Symbol) -> Result<(), VaultError> {
+        let args_hash = hash_abdicate_args(&env, &action);
         Self::accept(&env, &symbol_short!("abdicate"), &args_hash)?;
         set_abdicated(&env, &action);
-        env.events()
-            .publish((symbol_short!("abdicate"),), action);
+        env.events().publish((symbol_short!("abdicate"),), action);
         Ok(())
     }
 
@@ -364,8 +365,11 @@ impl VaultContract {
     }
 
     pub fn preview_deposit(env: Env, assets: i128) -> Result<i128, VaultError> {
-        if assets <= 0 {
+        if assets < 0 {
             return Err(VaultError::InvalidAmount);
+        }
+        if assets == 0 {
+            return Ok(0);
         }
         let config = read_config(&env).ok_or(VaultError::NotInitialized)?;
         let projected = Self::projected_state(&env)?;
@@ -377,26 +381,43 @@ impl VaultContract {
     }
 
     pub fn preview_mint(env: Env, shares: i128) -> Result<i128, VaultError> {
-        if shares <= 0 {
+        if shares < 0 {
             return Err(VaultError::InvalidAmount);
+        }
+        if shares == 0 {
+            return Ok(0);
         }
         let config = read_config(&env).ok_or(VaultError::NotInitialized)?;
         let projected = Self::projected_state(&env)?;
-        Ok(Self::to_assets_up(shares, &projected, config.virtual_shares))
+        Ok(Self::to_assets_up(
+            shares,
+            &projected,
+            config.virtual_shares,
+        ))
     }
 
     pub fn preview_withdraw(env: Env, assets: i128) -> Result<i128, VaultError> {
-        if assets <= 0 {
+        if assets < 0 {
             return Err(VaultError::InvalidAmount);
+        }
+        if assets == 0 {
+            return Ok(0);
         }
         let config = read_config(&env).ok_or(VaultError::NotInitialized)?;
         let projected = Self::projected_state(&env)?;
-        Ok(Self::to_shares_up(assets, &projected, config.virtual_shares))
+        Ok(Self::to_shares_up(
+            assets,
+            &projected,
+            config.virtual_shares,
+        ))
     }
 
     pub fn preview_redeem(env: Env, shares: i128) -> Result<i128, VaultError> {
-        if shares <= 0 {
+        if shares < 0 {
             return Err(VaultError::InvalidAmount);
+        }
+        if shares == 0 {
+            return Ok(0);
         }
         let config = read_config(&env).ok_or(VaultError::NotInitialized)?;
         let projected = Self::projected_state(&env)?;
@@ -448,7 +469,7 @@ impl VaultContract {
         write_state(env, &state);
         token::Client::new(env, &config.asset).transfer(
             caller,
-            &env.current_contract_address(),
+            env.current_contract_address(),
             &assets,
         );
         env.events().publish(
@@ -479,7 +500,7 @@ impl VaultContract {
         write_state(env, &state);
         token::Client::new(env, &config.asset).transfer(
             caller,
-            &env.current_contract_address(),
+            env.current_contract_address(),
             &assets,
         );
         env.events().publish(
@@ -508,7 +529,8 @@ impl VaultContract {
         }
         Self::spend_allowance_if_needed(env, caller, owner, shares)?;
         Self::burn_shares(env, owner, shares, &mut state)?;
-        if assets > token::Client::new(env, &config.asset).balance(&env.current_contract_address()) {
+        if assets > token::Client::new(env, &config.asset).balance(&env.current_contract_address())
+        {
             return Err(VaultError::InsufficientLiquidity);
         }
         state.total_assets -= assets;
@@ -544,7 +566,8 @@ impl VaultContract {
         }
         Self::spend_allowance_if_needed(env, caller, owner, shares)?;
         Self::burn_shares(env, owner, shares, &mut state)?;
-        if assets > token::Client::new(env, &config.asset).balance(&env.current_contract_address()) {
+        if assets > token::Client::new(env, &config.asset).balance(&env.current_contract_address())
+        {
             return Err(VaultError::InsufficientLiquidity);
         }
         state.total_assets -= assets;
@@ -647,7 +670,8 @@ impl VaultContract {
             });
         }
         let elapsed = (now - state.last_update_timestamp) as i128;
-        let real_assets = token::Client::new(env, &config.asset).balance(&env.current_contract_address());
+        let real_assets =
+            token::Client::new(env, &config.asset).balance(&env.current_contract_address());
         let max_gain = state.total_assets * config.max_rate * elapsed / astrion_math::WAD;
         let max_total = state.total_assets + max_gain;
         let new_total_assets = if real_assets < max_total {
@@ -770,4 +794,24 @@ fn pow10(exp: u32) -> i128 {
         out *= 10;
     }
     out
+}
+
+fn hash_allocator_args(env: &Env, account: &Address, enabled: bool) -> BytesN<32> {
+    env.crypto()
+        .sha256(&(account.clone(), enabled).to_xdr(env))
+        .to_bytes()
+}
+
+fn hash_fee_args(env: &Env, fee: i128, recipient: &Address) -> BytesN<32> {
+    env.crypto()
+        .sha256(&(fee, recipient.clone()).to_xdr(env))
+        .to_bytes()
+}
+
+fn hash_max_rate_args(env: &Env, rate: i128) -> BytesN<32> {
+    env.crypto().sha256(&rate.to_xdr(env)).to_bytes()
+}
+
+fn hash_abdicate_args(env: &Env, action: &Symbol) -> BytesN<32> {
+    env.crypto().sha256(&action.clone().to_xdr(env)).to_bytes()
 }
