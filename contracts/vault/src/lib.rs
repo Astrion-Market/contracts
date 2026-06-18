@@ -22,7 +22,7 @@ use storage::{
     set_initialized, set_locked, set_pending, set_sentinel as write_sentinel,
     set_state as write_state, set_timelock as write_timelock, timelock as read_timelock,
 };
-use types::{AccrualPreview, VaultConfig, VaultState};
+use types::{AccrualPreview, GateConfig, VaultConfig, VaultState};
 
 #[contract]
 pub struct VaultContract;
@@ -55,6 +55,12 @@ impl VaultContract {
             management_fee: 0,
             management_fee_recipient: env.current_contract_address(),
             max_rate: DEFAULT_MAX_RATE,
+            gates: GateConfig {
+                receive_shares: None,
+                send_shares: None,
+                receive_assets: None,
+                send_assets: None,
+            },
         };
         let state = VaultState {
             total_assets: 0,

@@ -211,6 +211,39 @@
                           },
                           {
                             "key": {
+                              "symbol": "gates"
+                            },
+                            "val": {
+                              "map": [
+                                {
+                                  "key": {
+                                    "symbol": "receive_assets"
+                                  },
+                                  "val": "void"
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "receive_shares"
+                                  },
+                                  "val": "void"
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "send_assets"
+                                  },
+                                  "val": "void"
+                                },
+                                {
+                                  "key": {
+                                    "symbol": "send_shares"
+                                  },
+                                  "val": "void"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "management_fee"
                             },
                             "val": {

@@ -1,4 +1,28 @@
-use soroban_sdk::{contracttype, Address, String};
+use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdapterChange {
+    pub ids: Vec<BytesN<32>>,
+    pub change: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Caps {
+    pub allocation: i128,
+    pub absolute_cap: i128,
+    pub relative_cap: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GateConfig {
+    pub receive_shares: Option<Address>,
+    pub send_shares: Option<Address>,
+    pub receive_assets: Option<Address>,
+    pub send_assets: Option<Address>,
+}
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -16,6 +40,7 @@ pub struct VaultConfig {
     pub management_fee_recipient: Address,
     /// Maximum share-price growth rate per second, WAD-scaled.
     pub max_rate: i128,
+    pub gates: GateConfig,
 }
 
 #[contracttype]
