@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "adapter-registry"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1809,6 +1816,13 @@ name = "vault"
 version = "0.1.0"
 dependencies = [
  "astrion-math",
+ "soroban-sdk",
+]
+
+[[package]]
+name = "vault-factory"
+version = "0.1.0"
+dependencies = [
  "soroban-sdk",
 ]
 
