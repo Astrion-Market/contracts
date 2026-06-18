@@ -10,7 +10,7 @@ use soroban_sdk::{
 use astrion_math::WAD;
 
 use crate::{
-    errors::MarketError, types::IsolatedMarketConfig, IsolatedMarketContract,
+    errors::MarketError, IsolatedMarketConfig, IsolatedMarketContract,
     IsolatedMarketContractClient,
 };
 

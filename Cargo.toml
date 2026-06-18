@@ -8,6 +8,7 @@ members = [
 [workspace.dependencies]
 soroban-sdk    = "25"
 astrion-math   = { path = "libs/math" }
+astrion-market-types = { path = "libs/market-types" }
 stellar-tokens = "0.7.1"
 stellar-access = "0.7.1"
 stellar-macros = "0.7.1"

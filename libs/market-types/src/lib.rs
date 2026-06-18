@@ -1,3 +1,11 @@
+#![no_std]
+
+//! Shared isolated-market data types.
+//!
+//! Kept in a dedicated, `#[contractimpl]`-free crate so both the market and the
+//! market factory can use them without the factory linking (and re-exporting)
+//! the market contract's entrypoints.
+
 use soroban_sdk::{contracttype, Address};
 
 /// Immutable configuration for an isolated market.

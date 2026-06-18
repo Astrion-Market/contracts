@@ -35,7 +35,6 @@
 #![allow(deprecated)]
 
 mod errors;
-mod types;
 
 #[cfg(test)]
 mod test;
@@ -48,7 +47,7 @@ use errors::MarketError;
 use soroban_sdk::{
     contract, contractclient, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
 };
-use types::{IsolatedMarketConfig, IsolatedMarketState, MarketPosition};
+pub use astrion_market_types::{IsolatedMarketConfig, IsolatedMarketState, MarketPosition};
 
 // ---------------------------------------------------------------------------
 // Storage
