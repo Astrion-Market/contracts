@@ -61,6 +61,8 @@ enum DataKey {
     Paused,
     Initialized,
     Position(Address),
+    /// Whether `operator` may act on `owner`'s position.
+    Authorization(Address, Address),
 }
 
 const PERSISTENT_TTL: u32 = 365 * 24 * 60 * 60 / 5;
@@ -348,6 +350,39 @@ impl IsolatedMarketContract {
         env.events()
             .publish((symbol_short!("wdcol"), on_behalf), assets);
         Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Account authorization
+    // -----------------------------------------------------------------------
+
+    /// Authorize or revoke `operator` to act on `owner`'s position (borrow,
+    /// withdraw, withdraw collateral on behalf of `owner`). Only `owner` may set
+    /// this. Soroban-native explicit permission — no signatures (see Step 6).
+    pub fn set_authorization(
+        env: Env,
+        owner: Address,
+        operator: Address,
+        authorized: bool,
+    ) -> Result<(), MarketError> {
+        owner.require_auth();
+        let key = DataKey::Authorization(owner.clone(), operator.clone());
+        if authorized {
+            env.storage().persistent().set(&key, &true);
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+        } else {
+            env.storage().persistent().remove(&key);
+        }
+        env.events()
+            .publish((symbol_short!("auth"), owner, operator), authorized);
+        Ok(())
+    }
+
+    /// Whether `operator` is authorized to act on `owner`'s position.
+    pub fn is_authorized(env: Env, owner: Address, operator: Address) -> bool {
+        Self::is_authorized_internal(&env, &owner, &operator)
     }
 
     // -----------------------------------------------------------------------
@@ -808,6 +843,17 @@ impl IsolatedMarketContract {
             return Err(MarketError::Paused);
         }
         Ok(())
+    }
+
+    /// True if `caller` may act on `owner`'s position: either it is the owner, or
+    /// the owner has authorized it via `set_authorization`.
+    fn is_authorized_internal(env: &Env, owner: &Address, caller: &Address) -> bool {
+        owner == caller
+            || env
+                .storage()
+                .persistent()
+                .get::<DataKey, bool>(&DataKey::Authorization(owner.clone(), caller.clone()))
+                .unwrap_or(false)
     }
 
     fn config(env: &Env) -> Result<IsolatedMarketConfig, MarketError> {

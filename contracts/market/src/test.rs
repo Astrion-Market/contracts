@@ -901,6 +901,30 @@ fn test_preview_liquidate_matches_execution() {
     assert!((seized - preview.seized_collateral).abs() <= 1);
 }
 
+// ---------------------------------------------------------------------------
+// Account authorization
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_authorization_roundtrip() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    let owner = Address::generate(&env);
+    let operator = Address::generate(&env);
+
+    assert!(!m.is_authorized(&owner, &operator));
+    m.set_authorization(&owner, &operator, &true);
+    assert!(m.is_authorized(&owner, &operator));
+    // Authorization is directional.
+    assert!(!m.is_authorized(&operator, &owner));
+
+    m.set_authorization(&owner, &operator, &false);
+    assert!(!m.is_authorized(&owner, &operator));
+}
+
 #[test]
 fn test_preview_liquidate_flags_bad_debt() {
     let env = Env::default();
