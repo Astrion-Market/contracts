@@ -21,7 +21,7 @@
 //! - Interest accrual increases `total_borrow_assets`; lenders' claim grows by
 //!   the borrower interest minus the protocol fee.
 //!
-//! ## Implementation status: STEP 4 (Morpho liquidation + bad debt)
+//! ## Implementation status: STEP 6 (account authorization)
 //!
 //! This crate is mid-port. Steps 2–4 implement the lender pool, borrower
 //! collateral, borrow/repay, and liquidation on Morpho share accounting with
@@ -29,7 +29,8 @@
 //! withdrawals/borrows up, debt valuation up). Liquidation uses Morpho's
 //! incentive factor with no close factor, socializes bad debt at liquidation
 //! time, and exposes `preview_liquidate` for bots. Arithmetic traps on overflow.
-//! Operator authorization is Step 6.
+//! Step 6 adds owner→operator authorization, enforced on borrow, withdraw, and
+//! withdraw_collateral.
 
 #![no_std]
 #![allow(deprecated)]
@@ -222,8 +223,8 @@ impl IsolatedMarketContract {
     ) -> Result<(i128, i128), MarketError> {
         caller.require_auth();
         Self::guard_live(&env)?;
-        // Operator delegation (caller != on_behalf) arrives in Step 6.
-        if caller != on_behalf {
+        // caller must be on_behalf or an operator it authorized.
+        if !Self::is_authorized_internal(&env, &on_behalf, &caller) {
             return Err(MarketError::Unauthorized);
         }
         Self::accrue_interest_internal(&env)?;
@@ -324,8 +325,8 @@ impl IsolatedMarketContract {
         if assets <= 0 {
             return Err(MarketError::InvalidAmount);
         }
-        // Operator delegation (caller != on_behalf) arrives in Step 6.
-        if caller != on_behalf {
+        // caller must be on_behalf or an operator it authorized.
+        if !Self::is_authorized_internal(&env, &on_behalf, &caller) {
             return Err(MarketError::Unauthorized);
         }
         Self::accrue_interest_internal(&env)?;
@@ -403,8 +404,8 @@ impl IsolatedMarketContract {
         if assets <= 0 {
             return Err(MarketError::InvalidAmount);
         }
-        // Operator delegation (caller != on_behalf) arrives in Step 6.
-        if caller != on_behalf {
+        // caller must be on_behalf or an operator it authorized.
+        if !Self::is_authorized_internal(&env, &on_behalf, &caller) {
             return Err(MarketError::Unauthorized);
         }
         Self::accrue_interest_internal(&env)?;

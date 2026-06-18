@@ -926,6 +926,54 @@ fn test_authorization_roundtrip() {
 }
 
 #[test]
+fn test_authorized_operator_can_borrow_on_behalf() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    lender_supplies(&env, &s, 1_000);
+    let owner = borrower_with_collateral(&env, &s, 1_000);
+    let operator = Address::generate(&env);
+    m.set_authorization(&owner, &operator, &true);
+
+    // Operator borrows against owner's collateral, receiving the loan itself.
+    m.borrow(&operator, &70_i128, &owner, &operator);
+
+    assert_eq!(token::Client::new(&env, &s.loan).balance(&operator), 70);
+    assert!(m.get_user_position(&owner).unwrap().borrow_shares > 0);
+}
+
+#[test]
+fn test_unauthorized_operator_cannot_borrow() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    lender_supplies(&env, &s, 1_000);
+    let owner = borrower_with_collateral(&env, &s, 1_000);
+    let operator = Address::generate(&env);
+
+    let result = m.try_borrow(&operator, &70_i128, &owner, &operator);
+    assert_eq!(result, Err(Ok(MarketError::Unauthorized)));
+}
+
+#[test]
+fn test_unauthorized_operator_cannot_withdraw_collateral() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    let owner = borrower_with_collateral(&env, &s, 1_000);
+    let operator = Address::generate(&env);
+
+    let result = m.try_withdraw_collateral(&operator, &100_i128, &owner, &operator);
+    assert_eq!(result, Err(Ok(MarketError::Unauthorized)));
+}
+
+#[test]
 fn test_preview_liquidate_flags_bad_debt() {
     let env = Env::default();
     env.mock_all_auths();
