@@ -24,4 +24,9 @@ pub enum VaultError {
     DataNotTimelocked = 31,
     TimelockNotExpired = 32,
     Abdicated = 33,
+
+    AdapterNotEnabled = 40,
+    CapExceeded = 41,
+    InvalidCap = 42,
+    GateRejected = 43,
 }

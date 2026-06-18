@@ -11,16 +11,21 @@ mod test;
 use astrion_math::{mul_div_down, mul_div_up};
 use errors::VaultError;
 use soroban_sdk::{
-    contract, contractimpl, symbol_short, token, xdr::ToXdr, Address, BytesN, Env, String, Symbol,
+    contract, contractimpl, symbol_short, token, xdr::ToXdr, Address, Bytes, BytesN, Env, String,
+    Symbol,
 };
 use storage::{
-    allowance as read_allowance, balance as read_balance, clear_pending,
-    executable_at as read_executable_at, get_config as read_config, get_state as read_state,
-    is_abdicated, is_allocator as read_is_allocator, is_initialized, is_locked,
-    is_sentinel as read_is_sentinel, set_abdicated, set_allocator as write_allocator,
-    set_allowance as write_allowance, set_balance as write_balance, set_config as write_config,
-    set_initialized, set_locked, set_pending, set_sentinel as write_sentinel,
-    set_state as write_state, set_timelock as write_timelock, timelock as read_timelock,
+    adapters as read_adapters, allowance as read_allowance, balance as read_balance,
+    caps as read_caps, clear_pending, executable_at as read_executable_at,
+    get_config as read_config, get_state as read_state, is_abdicated,
+    is_adapter as read_is_adapter, is_allocator as read_is_allocator, is_initialized, is_locked,
+    is_sentinel as read_is_sentinel, liquidity_adapter as read_liquidity_adapter,
+    liquidity_data as read_liquidity_data, set_abdicated, set_adapter as write_adapter,
+    set_adapters as write_adapters, set_allocator as write_allocator,
+    set_allowance as write_allowance, set_balance as write_balance, set_caps as write_caps,
+    set_config as write_config, set_initialized, set_liquidity as write_liquidity, set_locked,
+    set_pending, set_sentinel as write_sentinel, set_state as write_state,
+    set_timelock as write_timelock, timelock as read_timelock,
 };
 use types::{AccrualPreview, GateConfig, VaultConfig, VaultState};
 
@@ -106,6 +111,34 @@ impl VaultContract {
         read_is_allocator(&env, &account)
     }
 
+    pub fn is_adapter(env: Env, adapter: Address) -> bool {
+        read_is_adapter(&env, &adapter)
+    }
+
+    pub fn get_adapters(env: Env) -> soroban_sdk::Vec<Address> {
+        read_adapters(&env)
+    }
+
+    pub fn allocation(env: Env, id: BytesN<32>) -> i128 {
+        read_caps(&env, &id).allocation
+    }
+
+    pub fn absolute_cap(env: Env, id: BytesN<32>) -> i128 {
+        read_caps(&env, &id).absolute_cap
+    }
+
+    pub fn relative_cap(env: Env, id: BytesN<32>) -> i128 {
+        read_caps(&env, &id).relative_cap
+    }
+
+    pub fn liquidity_adapter(env: Env) -> Option<Address> {
+        read_liquidity_adapter(&env)
+    }
+
+    pub fn liquidity_data(env: Env) -> Bytes {
+        read_liquidity_data(&env)
+    }
+
     pub fn timelock(env: Env, action: Symbol) -> u64 {
         read_timelock(&env, &action)
     }
@@ -132,6 +165,27 @@ impl VaultContract {
 
     pub fn hash_abdicate_args(env: Env, action: Symbol) -> BytesN<32> {
         hash_abdicate_args(&env, &action)
+    }
+
+    pub fn hash_adapter_args(env: Env, adapter: Address, enabled: bool) -> BytesN<32> {
+        hash_adapter_args(&env, &adapter, enabled)
+    }
+
+    pub fn hash_cap_args(
+        env: Env,
+        id: BytesN<32>,
+        absolute_cap: i128,
+        relative_cap: i128,
+    ) -> BytesN<32> {
+        hash_cap_args(&env, &id, absolute_cap, relative_cap)
+    }
+
+    pub fn hash_liquidity_args(env: Env, adapter: Option<Address>, data: Bytes) -> BytesN<32> {
+        hash_liquidity_args(&env, &adapter, &data)
+    }
+
+    pub fn hash_gate_args(env: Env, gate: Symbol, address: Option<Address>) -> BytesN<32> {
+        hash_gate_args(&env, &gate, &address)
     }
 
     pub fn is_abdicated(env: Env, action: Symbol) -> bool {
@@ -297,6 +351,119 @@ impl VaultContract {
         config.max_rate = rate;
         write_config(&env, &config);
         env.events().publish((symbol_short!("max_rate"),), rate);
+        Ok(())
+    }
+
+    pub fn set_adapter(env: Env, adapter: Address, enabled: bool) -> Result<(), VaultError> {
+        let args_hash = hash_adapter_args(&env, &adapter, enabled);
+        Self::accept(&env, &symbol_short!("adapter"), &args_hash)?;
+        let mut adapters = read_adapters(&env);
+        let exists = adapters.iter().any(|a| a == adapter);
+        if enabled && !exists {
+            adapters.push_back(adapter.clone());
+        }
+        if !enabled && exists {
+            let mut next = soroban_sdk::Vec::new(&env);
+            for current in adapters.iter() {
+                if current != adapter {
+                    next.push_back(current);
+                }
+            }
+            adapters = next;
+        }
+        write_adapter(&env, &adapter, enabled);
+        write_adapters(&env, &adapters);
+        env.events()
+            .publish((symbol_short!("adapter"), adapter), enabled);
+        Ok(())
+    }
+
+    pub fn set_caps(
+        env: Env,
+        id: BytesN<32>,
+        absolute_cap: i128,
+        relative_cap: i128,
+    ) -> Result<(), VaultError> {
+        if absolute_cap < 0 || relative_cap < 0 || relative_cap > astrion_math::WAD {
+            return Err(VaultError::InvalidCap);
+        }
+        let args_hash = hash_cap_args(&env, &id, absolute_cap, relative_cap);
+        Self::accept(&env, &symbol_short!("caps"), &args_hash)?;
+        let mut caps = read_caps(&env, &id);
+        caps.absolute_cap = absolute_cap;
+        caps.relative_cap = relative_cap;
+        write_caps(&env, &id, &caps);
+        env.events()
+            .publish((symbol_short!("caps"), id), (absolute_cap, relative_cap));
+        Ok(())
+    }
+
+    pub fn decrease_caps(
+        env: Env,
+        caller: Address,
+        id: BytesN<32>,
+        absolute_cap: i128,
+        relative_cap: i128,
+    ) -> Result<(), VaultError> {
+        caller.require_auth();
+        let config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        if caller != config.curator && !read_is_sentinel(&env, &caller) {
+            return Err(VaultError::Unauthorized);
+        }
+        if absolute_cap < 0 || relative_cap < 0 || relative_cap > astrion_math::WAD {
+            return Err(VaultError::InvalidCap);
+        }
+        let mut caps = read_caps(&env, &id);
+        if (caps.absolute_cap != 0 && absolute_cap > caps.absolute_cap)
+            || (caps.relative_cap != 0 && relative_cap > caps.relative_cap)
+        {
+            return Err(VaultError::InvalidCap);
+        }
+        caps.absolute_cap = absolute_cap;
+        caps.relative_cap = relative_cap;
+        write_caps(&env, &id, &caps);
+        env.events().publish(
+            (symbol_short!("caps_dec"), id),
+            (absolute_cap, relative_cap),
+        );
+        Ok(())
+    }
+
+    pub fn set_liquidity_adapter_and_data(
+        env: Env,
+        adapter: Option<Address>,
+        data: Bytes,
+    ) -> Result<(), VaultError> {
+        if let Some(address) = adapter.clone() {
+            if !read_is_adapter(&env, &address) {
+                return Err(VaultError::AdapterNotEnabled);
+            }
+        }
+        let args_hash = hash_liquidity_args(&env, &adapter, &data);
+        Self::accept(&env, &symbol_short!("liquid"), &args_hash)?;
+        write_liquidity(&env, &adapter, &data);
+        env.events()
+            .publish((symbol_short!("liquid"),), (adapter, data));
+        Ok(())
+    }
+
+    pub fn set_gate(env: Env, gate: Symbol, address: Option<Address>) -> Result<(), VaultError> {
+        let args_hash = hash_gate_args(&env, &gate, &address);
+        Self::accept(&env, &symbol_short!("gate"), &args_hash)?;
+        let mut config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        if gate == symbol_short!("recv_sh") {
+            config.gates.receive_shares = address.clone();
+        } else if gate == symbol_short!("send_sh") {
+            config.gates.send_shares = address.clone();
+        } else if gate == symbol_short!("recv_as") {
+            config.gates.receive_assets = address.clone();
+        } else if gate == symbol_short!("send_as") {
+            config.gates.send_assets = address.clone();
+        } else {
+            return Err(VaultError::InvalidAmount);
+        }
+        write_config(&env, &config);
+        env.events().publish((symbol_short!("gate"), gate), address);
         Ok(())
     }
 
@@ -820,4 +987,28 @@ fn hash_max_rate_args(env: &Env, rate: i128) -> BytesN<32> {
 
 fn hash_abdicate_args(env: &Env, action: &Symbol) -> BytesN<32> {
     env.crypto().sha256(&action.clone().to_xdr(env)).to_bytes()
+}
+
+fn hash_adapter_args(env: &Env, adapter: &Address, enabled: bool) -> BytesN<32> {
+    env.crypto()
+        .sha256(&(adapter.clone(), enabled).to_xdr(env))
+        .to_bytes()
+}
+
+fn hash_cap_args(env: &Env, id: &BytesN<32>, absolute_cap: i128, relative_cap: i128) -> BytesN<32> {
+    env.crypto()
+        .sha256(&(id.clone(), absolute_cap, relative_cap).to_xdr(env))
+        .to_bytes()
+}
+
+fn hash_liquidity_args(env: &Env, adapter: &Option<Address>, data: &Bytes) -> BytesN<32> {
+    env.crypto()
+        .sha256(&(adapter.clone(), data.clone()).to_xdr(env))
+        .to_bytes()
+}
+
+fn hash_gate_args(env: &Env, gate: &Symbol, address: &Option<Address>) -> BytesN<32> {
+    env.crypto()
+        .sha256(&(gate.clone(), address.clone()).to_xdr(env))
+        .to_bytes()
 }
