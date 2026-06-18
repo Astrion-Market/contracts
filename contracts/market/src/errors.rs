@@ -24,6 +24,12 @@ pub enum MarketError {
     HealthFactorTooLow = 20,
     HealthFactorOk = 21,
 
+    // Liquidation
+    /// `min_collateral_out` not met (price moved / stale simulation).
+    SlippageExceeded = 22,
+    /// `deadline` passed before execution.
+    DeadlineExpired = 23,
+
     // Oracle
     OracleCallFailed = 30,
 }

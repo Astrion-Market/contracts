@@ -23,7 +23,9 @@ pub struct IsolatedMarketConfig {
     /// liquidatable once it crosses that line. Must be in (0, WAD).
     pub lltv: i128,
 
-    /// Bonus awarded to liquidators above seized collateral value (WAD).
+    /// Deprecated: superseded by the Morpho liquidation incentive factor, which
+    /// is derived from `lltv` at liquidation time. Still validated for range and
+    /// retained for storage compatibility; no longer affects liquidation math.
     pub liquidation_bonus: i128,
 
     /// Governance-set fee on borrower interest sent to the treasury (WAD).

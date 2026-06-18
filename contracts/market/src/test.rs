@@ -670,6 +670,8 @@ fn test_repay_no_debt_fails() {
 // Liquidate
 // ---------------------------------------------------------------------------
 
+const NO_DEADLINE: u64 = u64::MAX;
+
 #[test]
 fn test_liquidate_healthy_position_fails() {
     let env = Env::default();
@@ -683,12 +685,13 @@ fn test_liquidate_healthy_position_fails() {
 
     let liquidator = Address::generate(&env);
     mint_loan(&env, &s, &liquidator, 50);
-    let result = m.try_liquidate(&liquidator, &borrower, &35_i128);
+    // seized=0, repay 1 share — gate should reject on health, not inputs.
+    let result = m.try_liquidate(&liquidator, &borrower, &0_i128, &1_i128, &0_i128, &NO_DEADLINE);
     assert_eq!(result, Err(Ok(MarketError::HealthFactorOk)));
 }
 
 #[test]
-fn test_liquidate_undercollateralized_succeeds() {
+fn test_liquidate_full_repay_by_shares() {
     let env = Env::default();
     env.mock_all_auths();
     let s = setup(&env);
@@ -699,18 +702,96 @@ fn test_liquidate_undercollateralized_succeeds() {
     let borrower = borrower_with_collateral(&env, &s, 1_000);
     m.borrow(&borrower, &70_i128, &borrower, &borrower);
 
-    // Crash collateral $1 → $0.5: power = 1000 × 0.5 × 0.8 = $400; debt = $700.
-    oracle.set_price(&s.collateral, &(WAD / 2));
+    // Mild crash $1 → $0.85: power = 1000 × 0.85 × 0.8 = $680 < $700 debt.
+    // Full repay seizes ~875 collateral (< 1000), so no bad debt.
+    oracle.set_price(&s.collateral, &(WAD * 85 / 100));
+
+    let shares = m.get_user_position(&borrower).unwrap().borrow_shares;
+    let liquidator = Address::generate(&env);
+    mint_loan(&env, &s, &liquidator, 100);
+
+    let (seized, repaid) =
+        m.liquidate(&liquidator, &borrower, &0_i128, &shares, &0_i128, &NO_DEADLINE);
+
+    assert!(seized > 0 && seized < 1_000);
+    assert_eq!(repaid, 70);
+    assert_eq!(
+        token::Client::new(&env, &s.collateral).balance(&liquidator),
+        seized
+    );
+    // Debt fully cleared, collateral remains (no bad debt).
+    assert_eq!(m.get_user_position(&borrower).unwrap().borrow_shares, 0);
+    assert_eq!(m.get_market_state().unwrap().total_borrow_assets, 0);
+    assert!(m.get_user_position(&borrower).unwrap().collateral > 0);
+}
+
+#[test]
+fn test_liquidate_by_seized_assets() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+    let oracle = MockOracleClient::new(&env, &s.oracle_id);
+
+    lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+    oracle.set_price(&s.collateral, &(WAD * 85 / 100));
 
     let liquidator = Address::generate(&env);
-    mint_loan(&env, &s, &liquidator, 35);
-    m.liquidate(&liquidator, &borrower, &35_i128);
+    mint_loan(&env, &s, &liquidator, 100);
 
-    assert!(token::Client::new(&env, &s.collateral).balance(&liquidator) > 0);
-    let pos = m.get_user_position(&borrower).unwrap();
-    assert!(pos.collateral < 1_000);
-    // Debt was reduced by the repaid amount.
+    // Seize exactly 400 collateral; repaid debt is derived.
+    let (seized, repaid) =
+        m.liquidate(&liquidator, &borrower, &400_i128, &0_i128, &0_i128, &NO_DEADLINE);
+
+    assert_eq!(seized, 400);
+    assert!(repaid > 0 && repaid < 70);
+    assert_eq!(
+        token::Client::new(&env, &s.collateral).balance(&liquidator),
+        400
+    );
     assert!(m.get_market_state().unwrap().total_borrow_assets < 70);
+}
+
+#[test]
+fn test_liquidate_deadline_expired() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+
+    lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+
+    env.ledger().with_mut(|li| li.timestamp = 1_000);
+    let liquidator = Address::generate(&env);
+    let result = m.try_liquidate(&liquidator, &borrower, &0_i128, &1_i128, &0_i128, &500_u64);
+    assert_eq!(result, Err(Ok(MarketError::DeadlineExpired)));
+}
+
+#[test]
+fn test_liquidate_slippage_exceeded() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+    let m = market(&env, &s);
+    let oracle = MockOracleClient::new(&env, &s.oracle_id);
+
+    lender_supplies(&env, &s, 1_000);
+    let borrower = borrower_with_collateral(&env, &s, 1_000);
+    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+    oracle.set_price(&s.collateral, &(WAD * 85 / 100));
+
+    let shares = m.get_user_position(&borrower).unwrap().borrow_shares;
+    let liquidator = Address::generate(&env);
+    mint_loan(&env, &s, &liquidator, 100);
+
+    // Demand far more collateral than the incentive yields.
+    let result =
+        m.try_liquidate(&liquidator, &borrower, &0_i128, &shares, &10_000_i128, &NO_DEADLINE);
+    assert_eq!(result, Err(Ok(MarketError::SlippageExceeded)));
 }
 
 // ---------------------------------------------------------------------------

@@ -41,7 +41,7 @@ mod test;
 
 use astrion_math::{
     health_factor, to_assets_down, to_assets_up, to_shares_down, to_shares_up, wad_div, wad_mul,
-    WAD,
+    zero_floor_sub, WAD,
 };
 use errors::MarketError;
 use soroban_sdk::{
@@ -66,6 +66,11 @@ enum DataKey {
 const PERSISTENT_TTL: u32 = 365 * 24 * 60 * 60 / 5;
 const SECONDS_PER_YEAR: i128 = 31_536_000;
 const MAX_LIQUIDATION_BONUS: i128 = WAD / 2;
+
+/// Morpho liquidation incentive parameters.
+/// `lif = min(MAX_LIF, 1 / (1 - CURSOR * (1 - lltv)))`.
+const MAX_LIF: i128 = 115 * WAD / 100; // 1.15
+const LIQUIDATION_CURSOR: i128 = 3 * WAD / 10; // 0.30
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -449,23 +454,31 @@ impl IsolatedMarketContract {
     // Liquidation
     // -----------------------------------------------------------------------
 
-    /// Liquidate an unhealthy position.
+    /// Liquidate an unhealthy position (Morpho model — no close factor).
     ///
-    /// Repays up to the close factor (50%) of the borrower's debt and seizes the
-    /// equivalent collateral value plus `liquidation_bonus`. This is the legacy
-    /// close-factor model adapted to the new share accounting; Morpho's
-    /// no-close-factor liquidation with bad-debt socialization is Step 4.
+    /// The caller specifies exactly one of `seized_assets` (collateral to take)
+    /// or `repaid_shares` (debt shares to repay); the other is derived from the
+    /// liquidation incentive factor `lif = min(MAX_LIF, 1/(1 - CURSOR*(1-lltv)))`.
+    /// `min_collateral_out` and `deadline` protect the liquidator from price
+    /// moves and stale simulations. Returns `(seized_assets, repaid_assets)`.
+    ///
+    /// Bad-debt socialization (seizing all collateral with debt remaining) is
+    /// added in the next commit.
     pub fn liquidate(
         env: Env,
         liquidator: Address,
         borrower: Address,
-        repay_amount: i128,
-    ) -> Result<(), MarketError> {
+        seized_assets: i128,
+        repaid_shares: i128,
+        min_collateral_out: i128,
+        deadline: u64,
+    ) -> Result<(i128, i128), MarketError> {
         liquidator.require_auth();
         Self::guard_live(&env)?;
-        if repay_amount <= 0 {
-            return Err(MarketError::InvalidAmount);
+        if env.ledger().timestamp() > deadline {
+            return Err(MarketError::DeadlineExpired);
         }
+        Self::require_one_input(seized_assets, repaid_shares)?;
         Self::accrue_interest_internal(&env)?;
         let config = Self::config(&env)?;
         let mut state = Self::state(&env)?;
@@ -473,50 +486,75 @@ impl IsolatedMarketContract {
         if Self::health_factor_for_position(&env, &config, &state, &position)? >= WAD {
             return Err(MarketError::HealthFactorOk);
         }
-        let debt = to_assets_up(
-            position.borrow_shares,
-            state.total_borrow_assets,
-            state.total_borrow_shares,
-        );
-        let max_repay = wad_mul(debt, WAD / 2);
-        let actual = if repay_amount > max_repay {
-            max_repay
+
+        let lif = Self::liquidation_incentive_factor(config.lltv);
+        let price_collateral = Self::price(&env, &config.collateral_asset)?;
+        let price_loan = Self::price(&env, &config.loan_asset)?;
+
+        // Derive the unspecified side from the incentive factor. Collateral and
+        // loan are valued through their oracle prices in the common numeraire.
+        let (seized_assets, repaid_shares) = if seized_assets > 0 {
+            let seized_value = wad_mul(seized_assets, price_collateral);
+            let repaid_value = wad_div(seized_value, lif);
+            let repaid_assets = wad_div(repaid_value, price_loan);
+            let shares =
+                to_shares_up(repaid_assets, state.total_borrow_assets, state.total_borrow_shares);
+            (seized_assets, shares)
         } else {
-            repay_amount
+            let repaid_assets =
+                to_assets_down(repaid_shares, state.total_borrow_assets, state.total_borrow_shares);
+            let repaid_value = wad_mul(repaid_assets, price_loan);
+            let seized_value = wad_mul(repaid_value, lif);
+            let seized = wad_div(seized_value, price_collateral);
+            (seized, repaid_shares)
         };
-        let debt_value = wad_mul(actual, Self::price(&env, &config.loan_asset)?);
-        let with_bonus = wad_mul(debt_value, WAD + config.liquidation_bonus);
-        let collateral = wad_div(with_bonus, Self::price(&env, &config.collateral_asset)?);
-        if collateral > position.collateral {
+        // What the liquidator actually pays in loan assets (rounded up).
+        let repaid_assets =
+            to_assets_up(repaid_shares, state.total_borrow_assets, state.total_borrow_shares);
+
+        if repaid_shares <= 0 || repaid_shares > position.borrow_shares {
+            return Err(MarketError::InvalidAmount);
+        }
+        if seized_assets <= 0 || seized_assets > position.collateral {
             return Err(MarketError::InsufficientCollateral);
         }
-        let mut repaid_shares =
-            to_shares_down(actual, state.total_borrow_assets, state.total_borrow_shares);
-        if repaid_shares > position.borrow_shares {
-            repaid_shares = position.borrow_shares;
+        if seized_assets < min_collateral_out {
+            return Err(MarketError::SlippageExceeded);
         }
+
         position.borrow_shares -= repaid_shares;
-        position.collateral -= collateral;
+        position.collateral -= seized_assets;
         state.total_borrow_shares -= repaid_shares;
-        state.total_borrow_assets -= actual;
-        state.total_collateral -= collateral;
+        state.total_borrow_assets = zero_floor_sub(state.total_borrow_assets, repaid_assets);
+        state.total_collateral -= seized_assets;
         Self::set_position(&env, &borrower, &position);
         Self::set_state(&env, &state);
         token::Client::new(&env, &config.loan_asset).transfer(
             &liquidator,
             env.current_contract_address(),
-            &actual,
+            &repaid_assets,
         );
         token::Client::new(&env, &config.collateral_asset).transfer(
             &env.current_contract_address(),
             &liquidator,
-            &collateral,
+            &seized_assets,
         );
         env.events().publish(
             (symbol_short!("liq"), liquidator, borrower),
-            (actual, collateral),
+            (seized_assets, repaid_assets),
         );
-        Ok(())
+        Ok((seized_assets, repaid_assets))
+    }
+
+    /// Liquidation incentive factor: `min(MAX_LIF, 1/(1 - CURSOR*(1 - lltv)))`.
+    fn liquidation_incentive_factor(lltv: i128) -> i128 {
+        let denom = WAD - wad_mul(LIQUIDATION_CURSOR, WAD - lltv);
+        let lif = wad_div(WAD, denom);
+        if lif < MAX_LIF {
+            lif
+        } else {
+            MAX_LIF
+        }
     }
 
     // -----------------------------------------------------------------------
