@@ -17,7 +17,7 @@ use storage::{
     set_state as write_state,
 };
 use soroban_sdk::{contract, contractimpl, symbol_short, token, Address, Env, String};
-use types::{VaultConfig, VaultState};
+use types::{AccrualPreview, VaultConfig, VaultState};
 
 #[contract]
 pub struct VaultContract;
@@ -147,12 +147,76 @@ impl VaultContract {
         result
     }
 
+    pub fn accrue_interest(env: Env) -> Result<(), VaultError> {
+        Self::accrue_interest_internal(&env)
+    }
+
+    pub fn accrue_interest_view(env: Env) -> Result<AccrualPreview, VaultError> {
+        Self::accrue_interest_preview(&env)
+    }
+
+    pub fn preview_deposit(env: Env, assets: i128) -> Result<i128, VaultError> {
+        if assets <= 0 {
+            return Err(VaultError::InvalidAmount);
+        }
+        let config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        let projected = Self::projected_state(&env)?;
+        Ok(Self::to_shares_down(
+            assets,
+            &projected,
+            config.virtual_shares,
+        ))
+    }
+
+    pub fn preview_mint(env: Env, shares: i128) -> Result<i128, VaultError> {
+        if shares <= 0 {
+            return Err(VaultError::InvalidAmount);
+        }
+        let config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        let projected = Self::projected_state(&env)?;
+        Ok(Self::to_assets_up(shares, &projected, config.virtual_shares))
+    }
+
+    pub fn preview_withdraw(env: Env, assets: i128) -> Result<i128, VaultError> {
+        if assets <= 0 {
+            return Err(VaultError::InvalidAmount);
+        }
+        let config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        let projected = Self::projected_state(&env)?;
+        Ok(Self::to_shares_up(assets, &projected, config.virtual_shares))
+    }
+
+    pub fn preview_redeem(env: Env, shares: i128) -> Result<i128, VaultError> {
+        if shares <= 0 {
+            return Err(VaultError::InvalidAmount);
+        }
+        let config = read_config(&env).ok_or(VaultError::NotInitialized)?;
+        let projected = Self::projected_state(&env)?;
+        Ok(Self::to_assets_down(
+            shares,
+            &projected,
+            config.virtual_shares,
+        ))
+    }
+
+    pub fn convert_to_shares(env: Env, assets: i128) -> Result<i128, VaultError> {
+        Self::preview_deposit(env, assets)
+    }
+
+    pub fn convert_to_assets(env: Env, shares: i128) -> Result<i128, VaultError> {
+        Self::preview_redeem(env, shares)
+    }
+
     pub fn total_supply(env: Env) -> i128 {
-        read_state(&env).map(|s| s.total_shares).unwrap_or(0)
+        Self::projected_state(&env)
+            .map(|s| s.total_shares)
+            .unwrap_or(0)
     }
 
     pub fn total_assets(env: Env) -> i128 {
-        read_state(&env).map(|s| s.total_assets).unwrap_or(0)
+        Self::projected_state(&env)
+            .map(|s| s.total_assets)
+            .unwrap_or(0)
     }
 
     fn deposit_internal(
@@ -164,6 +228,7 @@ impl VaultContract {
         if assets <= 0 {
             return Err(VaultError::InvalidAmount);
         }
+        Self::accrue_interest_internal(env)?;
         let config = read_config(env).ok_or(VaultError::NotInitialized)?;
         let mut state = read_state(env).ok_or(VaultError::NotInitialized)?;
         let shares = Self::to_shares_down(assets, &state, config.virtual_shares);
@@ -194,6 +259,7 @@ impl VaultContract {
         if shares <= 0 {
             return Err(VaultError::InvalidAmount);
         }
+        Self::accrue_interest_internal(env)?;
         let config = read_config(env).ok_or(VaultError::NotInitialized)?;
         let mut state = read_state(env).ok_or(VaultError::NotInitialized)?;
         let assets = Self::to_assets_up(shares, &state, config.virtual_shares);
@@ -225,6 +291,7 @@ impl VaultContract {
         if assets <= 0 {
             return Err(VaultError::InvalidAmount);
         }
+        Self::accrue_interest_internal(env)?;
         let config = read_config(env).ok_or(VaultError::NotInitialized)?;
         let mut state = read_state(env).ok_or(VaultError::NotInitialized)?;
         let shares = Self::to_shares_up(assets, &state, config.virtual_shares);
@@ -260,6 +327,7 @@ impl VaultContract {
         if shares <= 0 {
             return Err(VaultError::InvalidAmount);
         }
+        Self::accrue_interest_internal(env)?;
         let config = read_config(env).ok_or(VaultError::NotInitialized)?;
         let mut state = read_state(env).ok_or(VaultError::NotInitialized)?;
         let assets = Self::to_assets_down(shares, &state, config.virtual_shares);
@@ -321,6 +389,104 @@ impl VaultContract {
         }
         write_allowance(env, owner, caller, allowance - shares);
         Ok(())
+    }
+
+    fn accrue_interest_internal(env: &Env) -> Result<(), VaultError> {
+        let preview = Self::accrue_interest_preview(env)?;
+        let mut state = read_state(env).ok_or(VaultError::NotInitialized)?;
+        state.total_assets = preview.new_total_assets;
+        state.total_shares += preview.performance_fee_shares + preview.management_fee_shares;
+        state.last_update_timestamp = env.ledger().timestamp();
+        write_state(env, &state);
+
+        let config = read_config(env).ok_or(VaultError::NotInitialized)?;
+        if preview.performance_fee_shares > 0 {
+            let balance = read_balance(env, &config.performance_fee_recipient);
+            write_balance(
+                env,
+                &config.performance_fee_recipient,
+                balance + preview.performance_fee_shares,
+            );
+        }
+        if preview.management_fee_shares > 0 {
+            let balance = read_balance(env, &config.management_fee_recipient);
+            write_balance(
+                env,
+                &config.management_fee_recipient,
+                balance + preview.management_fee_shares,
+            );
+        }
+        env.events().publish(
+            (symbol_short!("accrue"),),
+            (
+                preview.new_total_assets,
+                preview.performance_fee_shares,
+                preview.management_fee_shares,
+            ),
+        );
+        Ok(())
+    }
+
+    fn accrue_interest_preview(env: &Env) -> Result<AccrualPreview, VaultError> {
+        let config = read_config(env).ok_or(VaultError::NotInitialized)?;
+        let state = read_state(env).ok_or(VaultError::NotInitialized)?;
+        let now = env.ledger().timestamp();
+        if now <= state.last_update_timestamp {
+            return Ok(AccrualPreview {
+                new_total_assets: state.total_assets,
+                performance_fee_shares: 0,
+                management_fee_shares: 0,
+            });
+        }
+        let elapsed = (now - state.last_update_timestamp) as i128;
+        let real_assets = token::Client::new(env, &config.asset).balance(&env.current_contract_address());
+        let max_gain = state.total_assets * config.max_rate * elapsed / astrion_math::WAD;
+        let max_total = state.total_assets + max_gain;
+        let new_total_assets = if real_assets < max_total {
+            real_assets
+        } else {
+            max_total
+        };
+        let interest = if new_total_assets > state.total_assets {
+            new_total_assets - state.total_assets
+        } else {
+            0
+        };
+        let performance_fee_assets = interest * config.performance_fee / astrion_math::WAD;
+        let management_fee_assets =
+            new_total_assets * elapsed * config.management_fee / astrion_math::WAD;
+        let fee_base = new_total_assets - performance_fee_assets - management_fee_assets;
+        let performance_fee_shares = if performance_fee_assets > 0 {
+            mul_div_down(
+                performance_fee_assets,
+                state.total_shares + config.virtual_shares,
+                fee_base + VIRTUAL_ASSETS,
+            )
+        } else {
+            0
+        };
+        let management_fee_shares = if management_fee_assets > 0 {
+            mul_div_down(
+                management_fee_assets,
+                state.total_shares + config.virtual_shares,
+                fee_base + VIRTUAL_ASSETS,
+            )
+        } else {
+            0
+        };
+        Ok(AccrualPreview {
+            new_total_assets,
+            performance_fee_shares,
+            management_fee_shares,
+        })
+    }
+
+    fn projected_state(env: &Env) -> Result<VaultState, VaultError> {
+        let preview = Self::accrue_interest_preview(env)?;
+        let mut state = read_state(env).ok_or(VaultError::NotInitialized)?;
+        state.total_assets = preview.new_total_assets;
+        state.total_shares += preview.performance_fee_shares + preview.management_fee_shares;
+        Ok(state)
     }
 
     fn to_shares_down(assets: i128, state: &VaultState, virtual_shares: i128) -> i128 {

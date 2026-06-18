@@ -2,13 +2,17 @@
 
 extern crate std;
 
-use soroban_sdk::{testutils::Address as _, token, Address, Env, String};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    token, Address, Env, String,
+};
 
 use crate::{VaultContract, VaultContractClient};
 
 struct Setup<'a> {
     env: Env,
     client: VaultContractClient<'a>,
+    vault_id: Address,
     owner: Address,
     asset: Address,
 }
@@ -32,6 +36,7 @@ fn setup<'a>() -> Setup<'a> {
     Setup {
         env,
         client,
+        vault_id,
         owner,
         asset,
     }
@@ -126,4 +131,40 @@ fn test_withdraw_uses_allowance_for_operator() {
 
     assert!(s.client.allowance(&owner, &operator) < shares);
     assert_eq!(token::Client::new(&s.env, &s.asset).balance(&receiver), 500);
+}
+
+#[test]
+fn test_previews_match_deposit_and_withdraw() {
+    let s = setup();
+    let user = Address::generate(&s.env);
+    mint_asset(&s.env, &s.asset, &user, 1_000);
+
+    let preview_shares = s.client.preview_deposit(&1_000);
+    let shares = s.client.deposit(&user, &1_000, &user);
+    assert_eq!(shares, preview_shares);
+
+    let preview_burn = s.client.preview_withdraw(&500);
+    let burned = s.client.withdraw(&user, &500, &user, &user);
+    assert_eq!(burned, preview_burn);
+}
+
+#[test]
+fn test_accrual_caps_donation_gain_by_max_rate() {
+    let s = setup();
+    let user = Address::generate(&s.env);
+    mint_asset(&s.env, &s.asset, &user, 100);
+    s.client.deposit(&user, &100, &user);
+
+    // Donation: real assets become 10_100, but max_rate is 200% APR.
+    mint_asset(&s.env, &s.asset, &s.vault_id, 10_000);
+    s.env
+        .ledger()
+        .with_mut(|li| li.timestamp = 31_536_000);
+
+    let preview = s.client.accrue_interest_view();
+    assert_eq!(preview.new_total_assets, 299);
+    assert_eq!(s.client.total_assets(), 299);
+
+    s.client.accrue_interest();
+    assert_eq!(s.client.get_state().unwrap().total_assets, 299);
 }
