@@ -17,6 +17,12 @@ enum MockAdapterKey {
     Asset,
 }
 
+#[contracttype]
+#[derive(Clone)]
+enum MockGateKey {
+    ReceiveShares(Address),
+}
+
 #[contract]
 struct MockAdapter;
 
@@ -69,6 +75,37 @@ impl MockAdapter {
             .get(&MockAdapterKey::Asset)
             .unwrap();
         token::Client::new(&env, &asset).balance(&env.current_contract_address())
+    }
+}
+
+#[contract]
+struct MockGate;
+
+#[contractimpl]
+impl MockGate {
+    pub fn set_receive_shares(env: Env, account: Address, allowed: bool) {
+        env.storage()
+            .persistent()
+            .set(&MockGateKey::ReceiveShares(account), &allowed);
+    }
+
+    pub fn can_receive_shares(env: Env, account: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get(&MockGateKey::ReceiveShares(account))
+            .unwrap_or(false)
+    }
+
+    pub fn can_send_shares(_env: Env, _account: Address) -> bool {
+        true
+    }
+
+    pub fn can_receive_assets(_env: Env, _account: Address) -> bool {
+        true
+    }
+
+    pub fn can_send_assets(_env: Env, _account: Address) -> bool {
+        true
     }
 }
 
@@ -139,6 +176,13 @@ fn set_liquidity(s: &Setup, adapter: &Address, data: &Bytes) {
     s.client.submit(&s.owner, &action, &args_hash);
     s.client
         .set_liquidity_adapter_and_data(&Some(adapter.clone()), data);
+}
+
+fn set_gate(s: &Setup, gate: Symbol, address: Option<Address>) {
+    let action = symbol_short!("gate");
+    let args_hash = s.client.hash_gate_args(&gate, &address);
+    s.client.submit(&s.owner, &action, &args_hash);
+    s.client.set_gate(&gate, &address);
 }
 
 #[test]
@@ -453,4 +497,25 @@ fn test_liquidity_adapter_auto_allocates_and_deallocates() {
     assert_eq!(s.client.allocation(&id), 750);
     assert_eq!(token::Client::new(&s.env, &s.asset).balance(&adapter), 750);
     assert_eq!(token::Client::new(&s.env, &s.asset).balance(&user), 250);
+}
+
+#[test]
+fn test_receive_shares_gate_fails_closed() {
+    let s = setup();
+    let user = Address::generate(&s.env);
+    let blocked = Address::generate(&s.env);
+    let allowed = Address::generate(&s.env);
+    let gate = s.env.register(MockGate, ());
+    let gate_client = MockGateClient::new(&s.env, &gate);
+
+    set_gate(&s, symbol_short!("recv_sh"), Some(gate));
+    gate_client.set_receive_shares(&allowed, &true);
+    mint_asset(&s.env, &s.asset, &user, 1_000);
+
+    let rejected = s.client.try_deposit(&user, &100, &blocked);
+    assert_eq!(rejected, Err(Ok(crate::errors::VaultError::GateRejected)));
+    assert_eq!(s.client.balance_of(&blocked), 0);
+
+    s.client.deposit(&user, &100, &allowed);
+    assert!(s.client.balance_of(&allowed) > 0);
 }

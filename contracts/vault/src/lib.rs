@@ -48,6 +48,14 @@ pub trait Adapter {
     fn real_assets(env: Env) -> i128;
 }
 
+#[contractclient(name = "GateClient")]
+pub trait VaultGate {
+    fn can_receive_shares(env: Env, account: Address) -> bool;
+    fn can_send_shares(env: Env, account: Address) -> bool;
+    fn can_receive_assets(env: Env, account: Address) -> bool;
+    fn can_send_assets(env: Env, account: Address) -> bool;
+}
+
 #[contract]
 pub struct VaultContract;
 
@@ -700,6 +708,8 @@ impl VaultContract {
         if assets <= 0 {
             return Err(VaultError::InvalidAmount);
         }
+        Self::require_can_send_assets(env, caller)?;
+        Self::require_can_receive_shares(env, receiver)?;
         Self::accrue_interest_internal(env)?;
         let config = read_config(env).ok_or(VaultError::NotInitialized)?;
         let mut state = read_state(env).ok_or(VaultError::NotInitialized)?;
@@ -732,6 +742,8 @@ impl VaultContract {
         if shares <= 0 {
             return Err(VaultError::InvalidAmount);
         }
+        Self::require_can_send_assets(env, caller)?;
+        Self::require_can_receive_shares(env, receiver)?;
         Self::accrue_interest_internal(env)?;
         let config = read_config(env).ok_or(VaultError::NotInitialized)?;
         let mut state = read_state(env).ok_or(VaultError::NotInitialized)?;
@@ -765,6 +777,8 @@ impl VaultContract {
         if assets <= 0 {
             return Err(VaultError::InvalidAmount);
         }
+        Self::require_can_send_shares(env, owner)?;
+        Self::require_can_receive_assets(env, receiver)?;
         Self::accrue_interest_internal(env)?;
         let config = read_config(env).ok_or(VaultError::NotInitialized)?;
         let mut state = read_state(env).ok_or(VaultError::NotInitialized)?;
@@ -803,6 +817,8 @@ impl VaultContract {
         if shares <= 0 {
             return Err(VaultError::InvalidAmount);
         }
+        Self::require_can_send_shares(env, owner)?;
+        Self::require_can_receive_assets(env, receiver)?;
         Self::accrue_interest_internal(env)?;
         let config = read_config(env).ok_or(VaultError::NotInitialized)?;
         let mut state = read_state(env).ok_or(VaultError::NotInitialized)?;
@@ -953,6 +969,49 @@ impl VaultContract {
             let relative_cap = first_total_assets * caps.relative_cap / astrion_math::WAD;
             if next_allocation > relative_cap {
                 return Err(VaultError::CapExceeded);
+            }
+        }
+        Ok(())
+    }
+
+    fn require_can_receive_shares(env: &Env, account: &Address) -> Result<(), VaultError> {
+        let config = read_config(env).ok_or(VaultError::NotInitialized)?;
+        if let Some(gate) = config.gates.receive_shares {
+            if !GateClient::new(env, &gate).can_receive_shares(account) {
+                return Err(VaultError::GateRejected);
+            }
+        }
+        Ok(())
+    }
+
+    fn require_can_send_shares(env: &Env, account: &Address) -> Result<(), VaultError> {
+        let config = read_config(env).ok_or(VaultError::NotInitialized)?;
+        if let Some(gate) = config.gates.send_shares {
+            if !GateClient::new(env, &gate).can_send_shares(account) {
+                return Err(VaultError::GateRejected);
+            }
+        }
+        Ok(())
+    }
+
+    fn require_can_receive_assets(env: &Env, account: &Address) -> Result<(), VaultError> {
+        if account == &env.current_contract_address() {
+            return Ok(());
+        }
+        let config = read_config(env).ok_or(VaultError::NotInitialized)?;
+        if let Some(gate) = config.gates.receive_assets {
+            if !GateClient::new(env, &gate).can_receive_assets(account) {
+                return Err(VaultError::GateRejected);
+            }
+        }
+        Ok(())
+    }
+
+    fn require_can_send_assets(env: &Env, account: &Address) -> Result<(), VaultError> {
+        let config = read_config(env).ok_or(VaultError::NotInitialized)?;
+        if let Some(gate) = config.gates.send_assets {
+            if !GateClient::new(env, &gate).can_send_assets(account) {
+                return Err(VaultError::GateRejected);
             }
         }
         Ok(())
