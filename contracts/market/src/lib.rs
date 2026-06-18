@@ -42,8 +42,8 @@ mod test;
 
 pub use astrion_market_types::{IsolatedMarketConfig, IsolatedMarketState, MarketPosition};
 use astrion_math::{
-    health_factor, to_assets_down, to_assets_up, to_shares_down, to_shares_up, wad_div, wad_mul,
-    zero_floor_sub, WAD,
+    health_factor, mul_div_down, mul_div_up, to_assets_down, to_assets_up, to_shares_down,
+    to_shares_up, wad_div, wad_mul, zero_floor_sub, WAD,
 };
 use errors::MarketError;
 use soroban_sdk::{
@@ -64,6 +64,7 @@ enum DataKey {
     Position(Address),
     /// Whether `operator` may act on `owner`'s position.
     Authorization(Address, Address),
+    AppVersion,
 }
 
 const PERSISTENT_TTL: u32 = 365 * 24 * 60 * 60 / 5;
@@ -95,6 +96,16 @@ pub struct RateSnapshot {
     pub borrow_rate: i128,
     pub supply_rate: i128,
     pub utilization: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MarketParams {
+    pub loan_asset: Address,
+    pub collateral_asset: Address,
+    pub oracle_adapter: Address,
+    pub rate_model: Address,
+    pub lltv: i128,
 }
 
 /// Read-only projection of a liquidation, for off-chain liquidator bots.
@@ -154,6 +165,9 @@ impl IsolatedMarketContract {
         env.storage().instance().set(&DataKey::Config, &config);
         env.storage().instance().set(&DataKey::State, &state);
         env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::AppVersion, &APP_VERSION);
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.events().publish(
             (symbol_short!("init"), config.collateral_asset.clone()),
@@ -543,15 +557,15 @@ impl IsolatedMarketContract {
         }
 
         let lif = Self::liquidation_incentive_factor(config.lltv);
-        let price_collateral = Self::price(&env, &config.collateral_asset)?;
-        let price_loan = Self::price(&env, &config.loan_asset)?;
 
         // Derive the unspecified side from the incentive factor. Collateral and
-        // loan are valued through their oracle prices in the common numeraire.
+        // loan are valued through decimals-normalized oracle prices in the
+        // common numeraire.
         let (seized_assets, repaid_shares) = if seized_assets > 0 {
-            let seized_value = wad_mul(seized_assets, price_collateral);
+            let seized_value =
+                Self::asset_value_down(&env, &config.collateral_asset, seized_assets)?;
             let repaid_value = wad_div(seized_value, lif);
-            let repaid_assets = wad_div(repaid_value, price_loan);
+            let repaid_assets = Self::assets_from_value_up(&env, &config.loan_asset, repaid_value)?;
             let shares = to_shares_up(
                 repaid_assets,
                 state.total_borrow_assets,
@@ -564,9 +578,10 @@ impl IsolatedMarketContract {
                 state.total_borrow_assets,
                 state.total_borrow_shares,
             );
-            let repaid_value = wad_mul(repaid_assets, price_loan);
+            let repaid_value = Self::asset_value_down(&env, &config.loan_asset, repaid_assets)?;
             let seized_value = wad_mul(repaid_value, lif);
-            let seized = wad_div(seized_value, price_collateral);
+            let seized =
+                Self::assets_from_value_down(&env, &config.collateral_asset, seized_value)?;
             (seized, repaid_shares)
         };
         // What the liquidator actually pays in loan assets (rounded up).
@@ -700,22 +715,28 @@ impl IsolatedMarketContract {
         }
 
         let lif = Self::liquidation_incentive_factor(config.lltv);
-        let price_collateral = Self::price(&env, &config.collateral_asset)?;
-        let price_loan = Self::price(&env, &config.loan_asset)?;
-
         let want = if repay_assets < debt_assets {
             repay_assets
         } else {
             debt_assets
         };
         let mut repaid_assets = want;
-        let mut seized = wad_div(wad_mul(wad_mul(want, price_loan), lif), price_collateral);
+        let repay_value = Self::asset_value_down(&env, &config.loan_asset, want)?;
+        let mut seized = Self::assets_from_value_down(
+            &env,
+            &config.collateral_asset,
+            wad_mul(repay_value, lif),
+        )?;
         let mut bad_debt_assets = 0;
         if seized >= position.collateral {
             // Collateral-limited: all collateral seized, residual is bad debt.
             seized = position.collateral;
-            let supported_value = wad_div(wad_mul(seized, price_collateral), lif);
-            repaid_assets = wad_div(supported_value, price_loan);
+            let supported_value = wad_div(
+                Self::asset_value_down(&env, &config.collateral_asset, seized)?,
+                lif,
+            );
+            repaid_assets =
+                Self::assets_from_value_down(&env, &config.loan_asset, supported_value)?;
             bad_debt_assets = zero_floor_sub(debt_assets, repaid_assets);
         }
         let repaid_shares = to_shares_down(
@@ -743,6 +764,26 @@ impl IsolatedMarketContract {
 
     pub fn get_market_config(env: Env) -> Option<IsolatedMarketConfig> {
         env.storage().instance().get(&DataKey::Config)
+    }
+
+    pub fn get_market_params(env: Env) -> Option<MarketParams> {
+        env.storage()
+            .instance()
+            .get::<DataKey, IsolatedMarketConfig>(&DataKey::Config)
+            .map(|config| MarketParams {
+                loan_asset: config.loan_asset,
+                collateral_asset: config.collateral_asset,
+                oracle_adapter: config.oracle_adapter,
+                rate_model: config.rate_model,
+                lltv: config.lltv,
+            })
+    }
+
+    pub fn app_version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::AppVersion)
+            .unwrap_or(APP_VERSION)
     }
 
     // -----------------------------------------------------------------------
@@ -776,6 +817,24 @@ impl IsolatedMarketContract {
             return Err(MarketError::Unauthorized);
         }
         env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
+    }
+
+    pub fn migrate(env: Env, admin: Address, target_version: u32) -> Result<(), MarketError> {
+        admin.require_auth();
+        let config = Self::config(&env)?;
+        if admin != config.treasury {
+            return Err(MarketError::Unauthorized);
+        }
+        let current = Self::app_version(env.clone());
+        if target_version <= current || target_version > APP_VERSION {
+            return Err(MarketError::InvalidVersion);
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::AppVersion, &target_version);
+        env.events()
+            .publish((symbol_short!("migrate"),), (current, target_version));
         Ok(())
     }
 
@@ -914,6 +973,46 @@ impl IsolatedMarketContract {
         )
     }
 
+    fn token_scale(env: &Env, asset: &Address) -> i128 {
+        pow10(token::Client::new(env, asset).decimals())
+    }
+
+    fn asset_value_down(env: &Env, asset: &Address, amount: i128) -> Result<i128, MarketError> {
+        Ok(mul_div_down(
+            amount,
+            Self::price(env, asset)?,
+            Self::token_scale(env, asset),
+        ))
+    }
+
+    fn asset_value_up(env: &Env, asset: &Address, amount: i128) -> Result<i128, MarketError> {
+        Ok(mul_div_up(
+            amount,
+            Self::price(env, asset)?,
+            Self::token_scale(env, asset),
+        ))
+    }
+
+    fn assets_from_value_down(
+        env: &Env,
+        asset: &Address,
+        value: i128,
+    ) -> Result<i128, MarketError> {
+        Ok(mul_div_down(
+            value,
+            Self::token_scale(env, asset),
+            Self::price(env, asset)?,
+        ))
+    }
+
+    fn assets_from_value_up(env: &Env, asset: &Address, value: i128) -> Result<i128, MarketError> {
+        Ok(mul_div_up(
+            value,
+            Self::token_scale(env, asset),
+            Self::price(env, asset)?,
+        ))
+    }
+
     /// Health factor for a position: `collateral_value * lltv / borrow_value`,
     /// WAD-scaled. Returns `i128::MAX` when the account has no debt.
     fn health_factor_for_position(
@@ -932,11 +1031,19 @@ impl IsolatedMarketContract {
         if debt == 0 {
             return Ok(i128::MAX);
         }
-        let collateral_value = wad_mul(
-            position.collateral,
-            Self::price(env, &config.collateral_asset)?,
-        );
-        let debt_value = wad_mul(debt, Self::price(env, &config.loan_asset)?);
+        let collateral_value =
+            Self::asset_value_down(env, &config.collateral_asset, position.collateral)?;
+        let debt_value = Self::asset_value_up(env, &config.loan_asset, debt)?;
         Ok(health_factor(collateral_value, config.lltv, debt_value))
     }
+}
+
+const APP_VERSION: u32 = 1;
+
+fn pow10(exp: u32) -> i128 {
+    let mut result = 1i128;
+    for _ in 0..exp {
+        result *= 10;
+    }
+    result
 }

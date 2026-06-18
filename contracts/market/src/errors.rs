@@ -32,4 +32,7 @@ pub enum MarketError {
 
     // Oracle
     OracleCallFailed = 30,
+
+    // Upgrade policy / migrations
+    InvalidVersion = 40,
 }

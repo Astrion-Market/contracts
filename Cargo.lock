@@ -948,6 +948,7 @@ dependencies = [
  "astrion-market-types",
  "astrion-math",
  "soroban-sdk",
+ "test-token",
 ]
 
 [[package]]

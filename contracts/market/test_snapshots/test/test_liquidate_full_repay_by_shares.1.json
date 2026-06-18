@@ -648,6 +648,18 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "AppVersion"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u32": 1
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "Config"
                           }
                         ]

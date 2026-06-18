@@ -4,7 +4,7 @@ extern crate std;
 
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, Env,
+    token, Address, Env, String,
 };
 
 use astrion_math::WAD;
@@ -85,6 +85,7 @@ mod mock_rate_model {
 
 use mock_oracle::{MockOracle, MockOracleClient};
 use mock_rate_model::MockRateModel;
+use test_token::{TestToken, TestTokenClient};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -152,6 +153,22 @@ fn mint_loan(env: &Env, s: &Setup, to: &Address, amount: i128) {
     token::StellarAssetClient::new(env, &s.loan).mint(to, &amount);
 }
 
+fn register_test_token(env: &Env, admin: &Address, decimals: u32, symbol: &str) -> Address {
+    env.register(
+        TestToken,
+        (
+            admin.clone(),
+            decimals,
+            String::from_str(env, symbol),
+            String::from_str(env, symbol),
+        ),
+    )
+}
+
+fn mint_test_token(env: &Env, token: &Address, to: &Address, amount: i128) {
+    TestTokenClient::new(env, token).mint(to, &amount);
+}
+
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
@@ -163,6 +180,12 @@ fn test_initialize_success() {
     let s = setup(&env);
     let cfg = market(&env, &s).get_market_config().unwrap();
     assert_eq!(cfg.lltv, WAD * 80 / 100);
+    let params = market(&env, &s).get_market_params().unwrap();
+    assert_eq!(params.loan_asset, s.loan);
+    assert_eq!(params.collateral_asset, s.collateral);
+    assert_eq!(params.oracle_adapter, s.oracle_id);
+    assert_eq!(params.lltv, WAD * 80 / 100);
+    assert_eq!(market(&env, &s).app_version(), 1);
 }
 
 #[test]
@@ -615,6 +638,48 @@ fn test_borrow_cap_enforced() {
     m.borrow(&borrower, &400_i128, &borrower, &borrower);
     let result = m.try_borrow(&borrower, &1_i128, &borrower, &borrower);
     assert_eq!(result, Err(Ok(MarketError::BorrowCapExceeded)));
+}
+
+#[test]
+fn test_health_factor_normalizes_mismatched_token_decimals() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let treasury = Address::generate(&env);
+    let rate_model_id = env.register(MockRateModel, ());
+    let oracle_id = env.register(MockOracle, ());
+    let collateral = register_test_token(&env, &treasury, 6, "COL6");
+    let loan = register_test_token(&env, &treasury, 18, "LOAN18");
+
+    MockOracleClient::new(&env, &oracle_id).set_price(&collateral, &1_000_000_000_i128);
+    MockOracleClient::new(&env, &oracle_id).set_price(&loan, &WAD);
+
+    let market_id = env.register(IsolatedMarketContract, ());
+    IsolatedMarketContractClient::new(&env, &market_id).initialize(&IsolatedMarketConfig {
+        collateral_asset: collateral.clone(),
+        loan_asset: loan.clone(),
+        oracle_adapter: oracle_id,
+        lltv: WAD / 2,
+        liquidation_bonus: WAD * 5 / 100,
+        reserve_factor: WAD / 10,
+        supply_cap: 0,
+        borrow_cap: 0,
+        rate_model: rate_model_id,
+        treasury,
+    });
+    let m = IsolatedMarketContractClient::new(&env, &market_id);
+
+    let lender = Address::generate(&env);
+    let borrower = Address::generate(&env);
+    mint_test_token(&env, &loan, &lender, 2_000_i128);
+    mint_test_token(&env, &collateral, &borrower, 2_i128);
+
+    m.supply(&lender, &2_000_i128, &lender);
+    m.supply_collateral(&borrower, &2_i128, &borrower);
+    m.borrow(&borrower, &1_000_i128, &borrower, &borrower);
+
+    assert_eq!(m.get_health_factor(&borrower), WAD);
+    let result = m.try_borrow(&borrower, &1_i128, &borrower, &borrower);
+    assert_eq!(result, Err(Ok(MarketError::HealthFactorTooLow)));
 }
 
 // ---------------------------------------------------------------------------
