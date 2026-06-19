@@ -1143,11 +1143,11 @@ fn test_interest_accrual_grows_totals() {
     let m = market(&env, &s);
 
     lender_supplies(&env, &s, 1_000);
-    let borrower = borrower_with_collateral(&env, &s, 1_000);
-    m.borrow(&borrower, &70_i128, &borrower, &borrower);
+    let borrower = borrower_with_collateral(&env, &s, 10_000);
+    m.borrow(&borrower, &700_i128, &borrower, &borrower);
 
     let before = m.get_market_state().unwrap();
-    assert_eq!(before.total_borrow_assets, 70);
+    assert_eq!(before.total_borrow_assets, 700);
     assert_eq!(before.total_supply_assets, 1_000);
 
     // Advance one year at 5% borrow APR.
@@ -1157,4 +1157,10 @@ fn test_interest_accrual_grows_totals() {
     let after = m.get_market_state().unwrap();
     assert!(after.total_borrow_assets > before.total_borrow_assets);
     assert!(after.total_supply_assets > before.total_supply_assets);
+    assert!(after.fee_assets > before.fee_assets);
+    assert_eq!(
+        after.total_borrow_assets - before.total_borrow_assets,
+        (after.total_supply_assets - before.total_supply_assets) + after.fee_assets
+            - before.fee_assets
+    );
 }

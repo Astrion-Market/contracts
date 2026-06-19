@@ -557,6 +557,39 @@ fn test_liquidity_adapter_auto_allocates_and_deallocates() {
 }
 
 #[test]
+fn test_force_deallocate_does_not_require_allocator_role() {
+    let s = setup();
+    let user = Address::generate(&s.env);
+    let caller = Address::generate(&s.env);
+    let adapter = s.env.register(MockAdapter, ());
+    let adapter_client = MockAdapterClient::new(&s.env, &adapter);
+    adapter_client.initialize(&s.asset);
+    let data = Bytes::from_array(&s.env, &[9, 9, 9, 9]);
+    let id = s.env.crypto().sha256(&data).to_bytes();
+
+    enable_adapter(&s, &adapter);
+    set_cap(&s, &id, 1_000, 0);
+    mint_asset(&s.env, &s.asset, &user, 1_000);
+    s.client.deposit(&user, &1_000, &user);
+
+    let allocator = Address::generate(&s.env);
+    enable_allocator(&s, &allocator);
+    s.client
+        .allocate(&allocator, &adapter, &data, &600, &symbol_short!("supply"));
+    assert_eq!(s.client.allocation(&id), 600);
+
+    assert!(!s.client.is_allocator(&caller));
+    s.client
+        .force_deallocate(&caller, &adapter, &data, &250, &symbol_short!("force"));
+
+    assert_eq!(s.client.allocation(&id), 350);
+    assert_eq!(
+        token::Client::new(&s.env, &s.asset).balance(&s.vault_id),
+        650
+    );
+}
+
+#[test]
 fn test_receive_shares_gate_fails_closed() {
     let s = setup();
     let user = Address::generate(&s.env);
