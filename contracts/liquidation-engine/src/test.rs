@@ -141,9 +141,7 @@ mod mock_core_pool {
         }
 
         pub fn get_market_config(env: Env, asset: Address) -> Option<MarketConfig> {
-            env.storage()
-                .persistent()
-                .get(&DataKey::Market(asset))
+            env.storage().persistent().get(&DataKey::Market(asset))
         }
 
         pub fn repay(
@@ -249,12 +247,7 @@ fn test_double_initialize_fails() {
     env.mock_all_auths();
     let s = setup(&env);
     let eng = engine(&env, &s);
-    let result = eng.try_initialize(
-        &s.admin,
-        &s.core_id,
-        &s.oracle_id,
-        &(WAD / 2),
-    );
+    let result = eng.try_initialize(&s.admin, &s.core_id, &s.oracle_id, &(WAD / 2));
     assert_eq!(result, Err(Ok(LiquidationError::AlreadyInitialized)));
 }
 
@@ -273,8 +266,7 @@ fn test_check_liquidation_healthy_position() {
     core(&env, &s).mock_hf(&borrower, &(WAD * 2));
     core(&env, &s).mock_borrow(&borrower, &s.debt_asset, &1_000_i128);
 
-    let preview = engine(&env, &s)
-        .check_liquidation(&borrower, &s.debt_asset, &s.collateral_asset);
+    let preview = engine(&env, &s).check_liquidation(&borrower, &s.debt_asset, &s.collateral_asset);
     assert!(!preview.is_liquidatable);
     assert_eq!(preview.max_repay_amount, 0);
 }
@@ -290,8 +282,7 @@ fn test_check_liquidation_undercollateralized() {
     core(&env, &s).mock_borrow(&borrower, &s.debt_asset, &1_000_i128);
     core(&env, &s).mock_supply(&borrower, &s.collateral_asset, &10_000_i128);
 
-    let preview = engine(&env, &s)
-        .check_liquidation(&borrower, &s.debt_asset, &s.collateral_asset);
+    let preview = engine(&env, &s).check_liquidation(&borrower, &s.debt_asset, &s.collateral_asset);
     assert!(preview.is_liquidatable);
     assert_eq!(preview.max_repay_amount, 500); // 50% close factor × 1000 debt
 }
@@ -329,7 +320,7 @@ fn test_liquidate_no_debt_fails() {
     let liquidator = Address::generate(&env);
     let borrower = Address::generate(&env);
     core(&env, &s).mock_hf(&borrower, &(WAD / 2)); // unhealthy
-    // No borrow balance set → defaults to 0.
+                                                   // No borrow balance set → defaults to 0.
 
     let result = engine(&env, &s).try_liquidate(
         &liquidator,
@@ -510,7 +501,7 @@ fn test_liquidate_with_limits_slippage_exceeded_fails() {
         &s.debt_asset,
         &s.collateral_asset,
         &500_i128,
-        &10_i128,  // max_collateral_seized too low
+        &10_i128, // max_collateral_seized too low
         &u64::MAX,
         &1_u64,
     );

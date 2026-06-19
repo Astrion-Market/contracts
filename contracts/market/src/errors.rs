@@ -15,11 +15,24 @@ pub enum MarketError {
     InsufficientCollateral = 12,
     SupplyCapExceeded = 13,
     BorrowCapExceeded = 14,
+    InsufficientSupply = 15,
+    /// Caller specified both `assets` and `shares`, or neither, where exactly
+    /// one is required.
+    InconsistentInput = 16,
 
     // Position health
     HealthFactorTooLow = 20,
     HealthFactorOk = 21,
 
+    // Liquidation
+    /// `min_collateral_out` not met (price moved / stale simulation).
+    SlippageExceeded = 22,
+    /// `deadline` passed before execution.
+    DeadlineExpired = 23,
+
     // Oracle
     OracleCallFailed = 30,
+
+    // Upgrade policy / migrations
+    InvalidVersion = 40,
 }

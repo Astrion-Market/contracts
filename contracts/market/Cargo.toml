@@ -11,6 +11,8 @@ doctest = false
 [dependencies]
 soroban-sdk = { workspace = true }
 astrion-math = { workspace = true }
+astrion-market-types = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+test-token = { path = "../test-token" }
