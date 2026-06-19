@@ -1,78 +1,94 @@
 {
   "network": "testnet",
-  "deployer": "deployer",
-  "created_at": "2026-05-24T18:57:34Z",
-  "updated_at": "2026-05-25T23:36:46Z",
+  "deployer": "steins-testnet",
+  "created_at": "2026-06-19T06:54:25Z",
+  "updated_at": "2026-06-19T07:07:45Z",
   "contracts": {
     "oracle-adapter": {
-      "contract_id": "CCVODOMSC3YBNTXDWRVKFFTSGLBYWZYGZ2N7WCL36WUGJVZVRH5Q5E2E",
+      "contract_id": "CACJW5GN3RDF5LH3HZNYFJHLY5B257E2TPYMHFMCDFERL7E3WXNRK7QO",
       "wasm_sha256": "7dfac9328d30438d5e47064920d2a92474ef588f9fb46627b8c2d5454f544c36",
       "wasm_file": "oracle_adapter.wasm",
       "status": "initialized",
-      "deployed_at": "2026-05-24T19:00:33Z",
-      "initialized_at": "2026-05-25T12:07:04Z"
+      "deployed_at": "2026-06-19T06:54:38Z"
     },
     "rate-model": {
-      "contract_id": "CBHR3TTEVYHOTYCS2E3U2WOCLHEA25R2GOFCLMI6F5VT6A4OZ3NMRCF4",
+      "contract_id": "CBUDQ3AVT4KLA4RGIN5A5PBCBKHUKJ2Z6LI3ANIPJHVWOE54BPM3WTUV",
       "wasm_sha256": "cb80e2f80a451e37f829cb687d9e624fb4419fc35d13f10733b95aad0391df7b",
       "wasm_file": "interest_rate_model.wasm",
       "status": "initialized",
-      "deployed_at": "2026-05-24T19:00:42Z",
-      "initialized_at": "2026-05-25T12:10:12Z"
+      "deployed_at": "2026-06-19T06:54:49Z"
     },
     "core-pool": {
-      "contract_id": "CCOHNWEPMIBPNI2B43NQYVGHVN3344FZKOALBN77HSV2BRR3VYYY3TST",
+      "contract_id": "CDWDB7LNEW3SR42PUCB7KMLC6A3V6K2J6MG6ETEFHQ3ZO5EU4FVENJJ2",
       "wasm_sha256": "ab10f2933b037ae20279a8d493aa769e4b5bff28d0a9fc36a0e61081c48901fa",
       "wasm_file": "core_pool.wasm",
       "status": "initialized",
-      "deployed_at": "2026-05-24T19:00:52Z",
-      "initialized_at": "2026-05-25T12:10:25Z"
+      "deployed_at": "2026-06-19T06:54:59Z"
     },
     "liquidation-engine": {
-      "contract_id": "CCOBO7ABVY4XL2JNUXQH5EPQYIOOKAKQV656Z6URT5U3PD3AGKXIW7TB",
+      "contract_id": "CD3LP3GPNSV2WROGZQ5JLIRW7UXKVPQGAGUFPXNNPG3OXGYMIJ3RYXPZ",
       "wasm_sha256": "5f58c03a5fb7bcbd3aa1691e52cf311c742f73a53d6050ebb347c3129bca4da2",
       "wasm_file": "liquidation_engine.wasm",
       "status": "initialized",
-      "deployed_at": "2026-05-24T19:01:03Z",
-      "initialized_at": "2026-05-25T12:11:05Z"
-    },
-    "market": {
-      "contract_id": "CBC5C6IY2OB3QRB2K6OUW7UVVVAIIDHEU75BQIXYNTTT632MXNLOPMVP",
-      "wasm_sha256": "55cdddee5d3a97c96671051ecde809494e8fb63ec0f1de7e92ed564c35ff9627",
-      "wasm_file": "market.wasm",
-      "status": "deployed",
-      "deployed_at": "2026-05-25T10:52:39Z"
+      "deployed_at": "2026-06-19T06:55:07Z"
     },
     "market-factory": {
-      "contract_id": "CBMMHD3EFPLI7PAQJGSR2S5ZM6ZTDTRVZMXBEBEWK3TJN5G5QHWUGWLN",
-      "wasm_sha256": "a669a6a582828999f7c73061a5127ebebdbde0d7f8fe988c646ddd66cf6d239e",
+      "contract_id": "CBM4BW772GFRAKX233ZJHGTAWN3WC4WPWGJIUJAO66B67NR7PYZ4PCWH",
+      "wasm_sha256": "d935c02924ce280210d28ecdc30ead5903ad0bd6846c501521eb8902705aa278",
       "wasm_file": "market_factory.wasm",
       "status": "initialized",
-      "deployed_at": "2026-05-25T10:52:39Z",
-      "market_wasm_hash": "55cdddee5d3a97c96671051ecde809494e8fb63ec0f1de7e92ed564c35ff9627",
-      "initialized_at": "2026-05-25T12:11:16Z"
+      "deployed_at": "2026-06-19T06:55:18Z",
+      "market_wasm_hash": "3237c6c0b8e04f3fbe5331b22748d92323471ff814a53e6dd50b87c3cabd1ee8"
     },
-    "test-usdc": {
-      "contract_id": "CCMO7GBSI5NNSU4DGTW4X2G6EEVIECQABIGKIUR55YRJ4VVMYN2ODSYL",
-      "wasm_sha256": "aabdb4affb2898fe97b8829336ae8df85e041b22d75ff2811f1e3e9f774429be",
-      "wasm_file": "test_token.wasm",
+    "vault-factory": {
+      "contract_id": "CCGA3ZPHRLPSVVH6JD7KC27HYWRP6KDHK6Z2G7XHJHUJU4ILX4VPRWBQ",
+      "wasm_sha256": "5a6bd8cefb3709b03c34d3abd1618bc8ce05d0362236bfa6e0ed25eae96fd8f9",
+      "wasm_file": "vault_factory.wasm",
       "status": "initialized",
-      "deployed_at": "2026-05-25T17:52:20Z"
+      "deployed_at": "2026-06-19T06:55:32Z",
+      "vault_wasm_hash": "6458089547ad15074b36e5ead20cd84fc26da60bc631fdff6fd6df22a102ba53"
     },
-    "test-wbtc": {
-      "contract_id": "CANNEKQWI5GAEVBDTWNSVSA3SZLI4QHVF3SD3KRU4QX7YKAIUBTVJ4IS",
-      "wasm_sha256": "aabdb4affb2898fe97b8829336ae8df85e041b22d75ff2811f1e3e9f774429be",
-      "wasm_file": "test_token.wasm",
+    "adapter-registry": {
+      "contract_id": "CAG67HPHYQW6LUTQRURE36SCWDPDQCCTRFAFWGO7LOHDTX5S3IYCJECI",
+      "wasm_sha256": "ad28868f68712c83b830faabf7a59887d977ecce3f833a96918e2efdafc51a3d",
+      "wasm_file": "adapter_registry.wasm",
       "status": "initialized",
-      "deployed_at": "2026-05-25T17:52:32Z"
+      "deployed_at": "2026-06-19T06:55:43Z"
     },
     "mock-oracle": {
-      "contract_id": "CCSGR2PW5LLTW6MHSPCFRFTNF5UUKGCXSN5DDK6UPF5PVJHPRIWVQHMW",
+      "contract_id": "CCKZQRVYXA7C66LJ6FAPKWTAB3RZTRM5S2RL473ZZ73LQYKKEJONMINQ",
       "wasm_sha256": "05d85051f158c7c2d31a0703688d6d74de1c104af1892f8eff43fd793d388378",
       "wasm_file": "mock_oracle.wasm",
       "status": "initialized",
-      "deployed_at": "2026-05-25T23:31:35Z",
-      "initialized_at": "2026-05-25T23:36:46Z"
+      "deployed_at": "2026-06-19T06:55:53Z"
+    },
+    "test-usdc": {
+      "contract_id": "CDZ4L3GZH4TGMOQC7XXPO3IKYABJM2FB2OGYXLZ7SPFFHM5HCLME3J7D",
+      "wasm_sha256": "aabdb4affb2898fe97b8829336ae8df85e041b22d75ff2811f1e3e9f774429be",
+      "wasm_file": "test_token.wasm",
+      "status": "initialized",
+      "deployed_at": "2026-06-19T06:56:03Z"
+    },
+    "test-wbtc": {
+      "contract_id": "CCBD6JIWJDHWSURR3NU42QRIWHGUHF4XLMPES7PI6RLTQUCEBG5MVP6T",
+      "wasm_sha256": "aabdb4affb2898fe97b8829336ae8df85e041b22d75ff2811f1e3e9f774429be",
+      "wasm_file": "test_token.wasm",
+      "status": "initialized",
+      "deployed_at": "2026-06-19T06:56:13Z"
+    },
+    "demo-market": {
+      "contract_id": "CCKXGK4SE3XW5M4MRRX3NKV5UOTQ57V73OVYUEFHAQ2GJOCYNTW36MRH",
+      "status": "initialized"
+    },
+    "demo-vault": {
+      "contract_id": "CDBJHSHCWGZ3DXRBL6K4IWP5BGWBIOU5PWBNLVAUT24RZNKZHTUFNO3A",
+      "status": "initialized"
+    },
+    "market-adapter": {
+      "contract_id": "CCHVHZFO5U74DT4JE2GHTFPKPWI5FIJ4IABRNVFB2OBGTR4DOZGD6YID",
+      "wasm_sha256": "54b9cf4c15b6e0749ab894301aadb40f732bf4e153e74f4f6b6ae7fabd9c06d4",
+      "wasm_file": "market_adapter.wasm",
+      "status": "initialized"
     }
   }
 }
