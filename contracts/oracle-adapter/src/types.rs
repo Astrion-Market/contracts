@@ -1,12 +1,12 @@
 use soroban_sdk::{contractevent, contracttype, Address, Symbol};
 
 // ---------------------------------------------------------------------------
-// SEP-0402 standard types
+// SEP-40 standard types
 // Matches the Reflector oracle interface exactly.
 // https://github.com/reflector-network/reflector-contract
 // ---------------------------------------------------------------------------
 
-/// An asset that can be priced by a SEP-0402 oracle.
+/// An asset that can be priced by a SEP-40 oracle.
 ///
 /// - `Stellar(address)` — any Soroban token contract (USDC, XLM wrapper, etc.)
 /// - `Other(symbol)`   — off-chain asset identified by ticker, e.g. Symbol::new("BTC")
@@ -17,7 +17,7 @@ pub enum Asset {
     Other(Symbol),
 }
 
-/// A price observation returned by a SEP-0402 oracle.
+/// A price observation returned by a SEP-40 oracle.
 ///
 /// `price`     — raw price in the oracle's native decimal precision (see `decimals()`).
 /// `timestamp` — Unix timestamp (seconds) of the price observation.
@@ -51,7 +51,7 @@ pub struct ResolvedPrice {
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct PriceSource {
-    /// The SEP-0402 oracle contract address for this asset.
+    /// The SEP-40 oracle contract address for this asset.
     pub oracle: Address,
     /// Maximum age of a price observation before it is considered stale (seconds).
     pub max_staleness: u64,

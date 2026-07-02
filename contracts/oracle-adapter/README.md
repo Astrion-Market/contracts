@@ -1,6 +1,6 @@
 # Oracle Adapter
 
-The oracle adapter wraps a SEP-0402 compatible Reflector oracle and returns
+The oracle adapter wraps a SEP-40 compatible Reflector oracle and returns
 WAD-normalized prices with staleness checks already applied.
 
 ## Example Init

@@ -101,7 +101,7 @@ stellar keys address deployer           # prints the public key
 
 ```
 contracts/           Soroban smart contracts (Rust)
-  oracle-adapter/    SEP-0402 price oracle wrapper             ✅ complete
+  oracle-adapter/    SEP-40 price oracle wrapper             ✅ complete
   interest-rate-model/ Kinked two-slope rate model             ✅ complete
   core-pool/         Shared multi-asset lending pool           ✅ complete
   liquidation-engine/ Liquidation logic with keeper support    ✅ complete

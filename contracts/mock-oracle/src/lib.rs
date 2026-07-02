@@ -1,6 +1,6 @@
 //! # MockOracle
 //!
-//! A SEP-0402 compatible price oracle for testnet simulation.
+//! A SEP-40 compatible price oracle for testnet simulation.
 //! NEVER deploy to mainnet.
 //!
 //! ## Interface
@@ -28,7 +28,7 @@
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol};
 
 // ---------------------------------------------------------------------------
-// SEP-0402 types (must match oracle-adapter exactly)
+// SEP-40 types (must match oracle-adapter exactly)
 // ---------------------------------------------------------------------------
 
 #[contracttype]
@@ -101,7 +101,7 @@ impl MockOracle {
     }
 
     // -----------------------------------------------------------------------
-    // SEP-0402 interface — called by OracleAdapter
+    // SEP-40 interface — called by OracleAdapter
     // -----------------------------------------------------------------------
 
     /// Returns the stored price for `asset`, or the $1.00 default.

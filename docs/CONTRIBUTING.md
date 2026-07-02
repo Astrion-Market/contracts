@@ -95,7 +95,7 @@ contracts/
 ├── Cargo.toml               # Workspace root — add new packages here
 │
 ├── contracts/               # Soroban smart contracts
-│   ├── oracle-adapter/      # SEP-0402 oracle wrapper (production)
+│   ├── oracle-adapter/      # SEP-40 oracle wrapper (production)
 │   ├── interest-rate-model/ # Kinked utilization rate curve (production)
 │   ├── core-pool/           # Shared liquidity pool (production)
 │   ├── market/              # Isolated two-asset pool (scaffold)
@@ -237,7 +237,7 @@ cp deployments/config.env.example deployments/testnet/config.env
 |---|---|---|
 | `ADMIN_ADDRESS` | Always | Stellar public key (`G…`) of the admin |
 | `TREASURY_ADDRESS` | Always | Wallet that receives protocol reserve fees |
-| `DEFAULT_ORACLE_ID` | First init only | SEP-0402 oracle contract ID (testnet: auto-set to mock-oracle) |
+| `DEFAULT_ORACLE_ID` | First init only | SEP-40 oracle contract ID (testnet: auto-set to mock-oracle) |
 | `DEFAULT_MAX_STALENESS` | Optional | Max oracle age in seconds (default: 300) |
 | `BASE_RATE` | Optional | Interest rate model base rate WAD (default: 1%) |
 | `SLOPE1` | Optional | Rate slope below kink (default: 4%) |
@@ -313,7 +313,7 @@ Calls `transfer_admin(new_admin)` on every initialized contract in dependency or
 
 ### Testnet-only contracts
 
-**`mock-oracle`** (`contracts/mock-oracle/`) — A SEP-0402-compatible oracle that always returns the price set by the admin. Never stale (timestamp = current ledger). Allows fully scripted price manipulation for liquidation testing.
+**`mock-oracle`** (`contracts/mock-oracle/`) — A SEP-40-compatible oracle that always returns the price set by the admin. Never stale (timestamp = current ledger). Allows fully scripted price manipulation for liquidation testing.
 
 ```bash
 # Default prices after init:

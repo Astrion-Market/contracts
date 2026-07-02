@@ -1,6 +1,6 @@
 //! # Oracle Adapter
 //!
-//! A SEP-0402 compliant oracle adapter for the Astrion protocol.
+//! A SEP-40 compliant oracle adapter for the Astrion protocol.
 //!
 //! ## Design
 //!
@@ -9,8 +9,8 @@
 //! receive a WAD-normalised price with staleness already validated — they never
 //! deal with raw oracle decimals or timestamp checking.
 //!
-//! ## SEP-0402 reference
-//! <https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0402.md>
+//! ## SEP-40 reference
+//! <https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0040.md>
 //!
 //! ## Price resolution flow
 //!
@@ -20,7 +20,7 @@
 //!        ▼
 //! OracleAdapter (this contract)
 //!   1. Look up PriceSource for asset (per-asset override or default oracle)
-//!   2. Cross-contract call → SEP-0402 oracle: lastprice(asset)
+//!   2. Cross-contract call → SEP-40 oracle: lastprice(asset)
 //!   3. Validate: price > 0
 //!   4. Validate: age ≤ max_staleness
 //!   5. Normalise raw price to WAD using oracle's decimals()
@@ -51,13 +51,13 @@ use types::{
 };
 
 // ---------------------------------------------------------------------------
-// SEP-0402 oracle client
+// SEP-40 oracle client
 //
 // Defines the cross-contract interface for calling any Reflector-compatible
 // oracle. The `contractclient` macro generates `OracleClient` automatically.
 // ---------------------------------------------------------------------------
 
-/// Minimal SEP-0402 interface — only the functions the adapter needs.
+/// Minimal SEP-40 interface — only the functions the adapter needs.
 #[contractclient(name = "OracleClient")]
 pub trait OracleTrait {
     /// Returns the most recent price observation for `asset`, or None if the
@@ -140,7 +140,7 @@ impl OracleAdapterContract {
         // Resolve which oracle + staleness limit to use for this asset.
         let (oracle_address, max_staleness) = Self::resolve_source(&env, &asset)?;
 
-        // Cross-contract call to the SEP-0402 oracle.
+        // Cross-contract call to the SEP-40 oracle.
         let oracle = OracleClient::new(&env, &oracle_address);
         let price_data: PriceData = oracle.lastprice(&asset).ok_or(OracleError::NoPrice)?;
 
