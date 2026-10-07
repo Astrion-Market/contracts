@@ -2,16 +2,20 @@
   "name": "@astrion/crosschain-sdk",
   "version": "0.1.0",
   "private": true,
-  "description": "Astrion cross-chain codecs and types (spec v1). Dependency-free.",
+  "description": "Astrion cross-chain SDK: codecs, action builders, intents, positions, events (spec v1).",
   "type": "module",
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "bun test"
+    "test": "bun test",
+    "gen:abi": "bun scripts/gen-abi.ts"
   },
   "engines": {
     "bun": ">=1.1"
+  },
+  "dependencies": {
+    "viem": "2.56.8"
   }
 }

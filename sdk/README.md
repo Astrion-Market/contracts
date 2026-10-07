@@ -1,16 +1,20 @@
 # @astrion/crosschain-sdk
 
-Dependency-free TypeScript codecs for Astrion's Stellar <-> EVM USDC routes
-(spec v1). It mirrors `libs/crosschain-types`, and both run the same vectors
-in `spec/fixtures/cctp/vectors.json`.
+TypeScript SDK for Astrion's Stellar ↔ EVM lending routes (spec v1). It shares
+test vectors with `libs/crosschain-types` and the Solidity tests.
 
-- Stellar strkeys (G / C / M), strict decoding with checksum
-- 7 ↔ 6 decimal conversion with retained dust, bounded by i64::MAX
-- `CctpForwarder` hook data (inbound to Stellar)
-- Raw CCTP V2 message decoding (for when API address fields are null)
-- Builders for Stellar `deposit_for_burn` and EVM `depositForBurnWithHook`
-  that reject malformed destinations before anything is signed
+| Module | Provides |
+|---|---|
+| `cctp`, `strkey` | Dependency-free CCTP codecs: strkeys, 7↔6 decimals, forwarder hooks, raw message decoding, burn builders |
+| `abi/generated` | ABIs (and account creation code) generated from `evm/out`. Never copied by hand |
+| `actions` | Action encoders for the Aave V3, Morpho Blue, Compound III and CCTP return modules |
+| `intent` | `ExecutionIntent` builder, EIP-712 typed data and digest, `transferId`, CREATE2 account prediction |
+| `positions` | Lens readers returning normalized positions with protocol-specific risk, source block and freshness |
+| `capabilities` | Route availability from `deployments/crosschain/*.json`. A route is usable only when enabled **and** verified |
+| `events` | Account event decoding plus an idempotent, reorg-aware `OperationStore` |
+| `contractErrors` | Revert data → stable error codes |
 
 ```bash
-make sdk-test   # bun test
+make sdk-abi    # regenerate src/abi/generated.ts after `make evm-build`
+make sdk-test
 ```

@@ -95,7 +95,11 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
 
     event Executed(address indexed target, uint256 value, bytes4 selector);
     event IntentExecuted(
-        uint256 indexed nonce, address indexed module, address relayer, uint256 fee
+        uint256 indexed nonce,
+        address indexed module,
+        address relayer,
+        uint256 fee,
+        bytes32 transferId
     );
     event NonceRevoked(uint256 indexed nonce);
     event TransferReceived(
@@ -387,7 +391,7 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
 
     function _payFee(ExecutionIntent calldata intent, uint256 fee, address submitter) internal {
         if (fee > 0) IERC20(intent.feeToken).safeTransfer(submitter, fee);
-        emit IntentExecuted(intent.nonce, intent.module, submitter, fee);
+        emit IntentExecuted(intent.nonce, intent.module, submitter, fee, intent.transferId);
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────

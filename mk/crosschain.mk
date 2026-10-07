@@ -36,3 +36,10 @@ cctp-status:
 
 cctp-evidence:
 	ops/crosschain/evidence.sh $(RUN)
+
+.PHONY: sdk-abi sdk-vectors
+sdk-abi:
+	cd sdk && bun install --frozen-lockfile && bun scripts/gen-abi.ts
+
+sdk-vectors:
+	cd sdk && bun scripts/gen-vectors.ts
