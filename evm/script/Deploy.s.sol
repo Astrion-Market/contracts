@@ -29,53 +29,76 @@ import {ProtocolIds} from "../src/libraries/ProtocolIds.sol";
 contract Deploy is Script {
     string internal manifest;
     string internal net;
+    string internal envName;
+
+    address internal policy;
+    address internal factory;
+    address internal returnAave;
+    address internal returnMorpho;
+    address internal returnCompound;
+    address internal aaveModule;
+    address internal aaveLens;
+    address internal compoundModule;
+    address internal compoundLens;
+    address internal morphoLens;
 
     function run() external {
-        string memory envName = vm.envString("ASTRION_ENV");
+        envName = vm.envString("ASTRION_ENV");
         net = vm.envString("NETWORK");
         manifest = vm.readFile(
             string.concat(vm.projectRoot(), "/../deployments/crosschain/", envName, ".json")
         );
         require(
-            keccak256(bytes(vm.parseJsonString(manifest, ".environment"))) == keccak256(bytes(envName)),
+            keccak256(bytes(vm.parseJsonString(manifest, ".environment")))
+                == keccak256(bytes(envName)),
             "manifest environment mismatch"
         );
         require(block.chainid == _netUint(".chainId"), "RPC chain id does not match manifest");
         _requireReleaseApproval(envName);
 
+        vm.startBroadcast();
+        _deployCore();
+        (aaveModule, aaveLens) = _deployAave(_netAddress(".usdc.address"));
+        (compoundModule, compoundLens) = _deployCompound();
+        morphoLens = _deployMorphoLens();
+        vm.stopBroadcast();
+        _write();
+    }
+
+    function _deployCore() internal {
         address usdc = _netAddress(".usdc.address");
         bytes32 forwarder = vm.envBytes32("STELLAR_FORWARDER_BYTES32");
         require(forwarder != bytes32(0), "forwarder required");
-
-        vm.startBroadcast();
-        RoutePolicy policy = new RoutePolicy(vm.envAddress("ROUTE_GUARDIAN"));
-        AstrionAccountFactory factory = new AstrionAccountFactory(
-            policy,
-            IMessageTransmitterV2(_netAddress(".cctp.messageTransmitterV2")),
-            IERC20(usdc),
-            uint32(_netUint(".cctpDomain"))
+        RoutePolicy routePolicy = new RoutePolicy(vm.envAddress("ROUTE_GUARDIAN"));
+        policy = address(routePolicy);
+        factory = address(
+            new AstrionAccountFactory(
+                routePolicy,
+                IMessageTransmitterV2(_netAddress(".cctp.messageTransmitterV2")),
+                IERC20(usdc),
+                uint32(_netUint(".cctpDomain"))
+            )
         );
         ITokenMessengerV2 messenger = ITokenMessengerV2(_netAddress(".cctp.tokenMessengerV2"));
-        address returnAave = address(new CctpReturnModule(ProtocolIds.AAVE_V3, messenger, usdc, forwarder));
-        address returnMorpho =
+        returnAave = address(new CctpReturnModule(ProtocolIds.AAVE_V3, messenger, usdc, forwarder));
+        returnMorpho =
             address(new CctpReturnModule(ProtocolIds.MORPHO_BLUE, messenger, usdc, forwarder));
-        address returnCompound =
+        returnCompound =
             address(new CctpReturnModule(ProtocolIds.COMPOUND_V3, messenger, usdc, forwarder));
+    }
 
-        (address aaveModule, address aaveLens) = _deployAave(usdc);
-        (address compoundModule, address compoundLens) = _deployCompound();
-        address morphoLens = _deployMorphoLens();
-        vm.stopBroadcast();
-
+    function _write() internal {
         string memory o = "deployment";
         vm.serializeString(o, "environment", envName);
         vm.serializeString(o, "network", net);
         vm.serializeUint(o, "chainId", block.chainid);
         vm.serializeUint(o, "deployedAtBlock", block.number);
         vm.serializeString(o, "gitCommit", vm.envOr("GIT_COMMIT", string("unknown")));
-        vm.serializeAddress(o, "routePolicy", address(policy));
-        vm.serializeAddress(o, "accountFactory", address(factory));
-        vm.serializeBytes32(o, "accountCreationCodeHash", keccak256(type(AstrionAccount).creationCode));
+        vm.serializeAddress(o, "routePolicy", policy);
+        vm.serializeAddress(o, "accountFactory", factory);
+        vm.serializeBytes32(
+            o, "accountCreationCodeHash", keccak256(type(AstrionAccount).creationCode)
+        );
         vm.serializeAddress(o, "returnModuleAaveV3", returnAave);
         vm.serializeAddress(o, "returnModuleMorphoBlue", returnMorpho);
         vm.serializeAddress(o, "returnModuleCompoundV3", returnCompound);
@@ -92,7 +115,10 @@ contract Deploy is Script {
 
     function _deployAave(address usdc) internal returns (address module, address lens) {
         (bool found, string memory r) = _route(string.concat("aave-v3:", net));
-        if (!found || !vm.keyExistsJson(manifest, string.concat(r, ".targets.poolAddressesProvider"))) {
+        if (
+            !found
+                || !vm.keyExistsJson(manifest, string.concat(r, ".targets.poolAddressesProvider"))
+        ) {
             return (address(0), address(0));
         }
         IAavePoolAddressesProvider provider = IAavePoolAddressesProvider(
@@ -114,24 +140,31 @@ contract Deploy is Script {
 
     function _deployMorphoLens() internal returns (address) {
         (bool found, string memory r) = _route(string.concat("morpho-blue:", net));
-        if (!found || !vm.keyExistsJson(manifest, string.concat(r, ".targets.morpho"))) return address(0);
+        if (!found || !vm.keyExistsJson(manifest, string.concat(r, ".targets.morpho"))) {
+            return address(0);
+        }
         return address(
-            new MorphoBlueLens(IMorphoBlue(vm.parseJsonAddress(manifest, string.concat(r, ".targets.morpho"))))
+            new MorphoBlueLens(
+                IMorphoBlue(vm.parseJsonAddress(manifest, string.concat(r, ".targets.morpho")))
+            )
         );
     }
 
     function _route(string memory id) internal view returns (bool, string memory) {
         for (uint256 i = 0; i < 6; i++) {
             string memory key = string.concat(".routes[", vm.toString(i), "]");
-            if (keccak256(bytes(vm.parseJsonString(manifest, string.concat(key, ".id")))) == keccak256(bytes(id))) {
+            if (
+                keccak256(bytes(vm.parseJsonString(manifest, string.concat(key, ".id"))))
+                    == keccak256(bytes(id))
+            ) {
                 return (true, key);
             }
         }
         return (false, "");
     }
 
-    function _requireReleaseApproval(string memory envName) internal view {
-        if (keccak256(bytes(envName)) != keccak256("mainnet")) return;
+    function _requireReleaseApproval(string memory env) internal view {
+        if (keccak256(bytes(env)) != keccak256("mainnet")) return;
         string memory path =
             string.concat(vm.projectRoot(), "/../deployments/crosschain/release-approval.json");
         require(vm.exists(path), "MainnetReleaseNotApproved: no release-approval.json");

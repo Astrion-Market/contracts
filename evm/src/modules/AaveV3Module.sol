@@ -64,7 +64,7 @@ contract AaveV3Module is IActionModule {
     function plan(address account, bytes32 marketScope, address, bytes calldata action)
         external
         view
-        returns (Plan memory p)
+        returns (Plan memory)
     {
         if (marketScope != marketScopeFor(loanAsset)) revert WrongMarket();
         (Kind kind, address asset, uint256 amount) = abi.decode(action, (Kind, address, uint256));
@@ -74,61 +74,95 @@ contract AaveV3Module is IActionModule {
         (, uint256 debtBase,,,,) = pool.getUserAccountData(account);
 
         if (kind == Kind.Supply || kind == Kind.SupplyCollateral) {
-            if (amount == 0) revert ZeroAmount();
-            bool collateral = kind == Kind.SupplyCollateral;
-            if (collateral && dataProvider.getDebtCeiling(asset) != 0) {
-                revert IsolationModeUnsupported(asset);
-            }
-            p.calls = new PlannedCall[](collateral ? 3 : 2);
-            p.calls[0] = PlannedCall(asset, abi.encodeCall(IERC20.approve, (address(pool), amount)));
-            p.calls[1] =
-                PlannedCall(address(pool), abi.encodeCall(IAavePool.supply, (asset, amount, account, 0)));
-            if (collateral) {
-                p.calls[2] = PlannedCall(
-                    address(pool), abi.encodeCall(IAavePool.setUserUseReserveAsCollateral, (asset, true))
-                );
-            }
-            p.approvalTokens = _one(asset);
-            p.increasesRisk = collateral ? debtBase == 0 : true;
-        } else if (kind == Kind.Withdraw) {
-            if (amount == 0) revert ZeroAmount();
-            p.calls = new PlannedCall[](1);
-            p.calls[0] =
-                PlannedCall(address(pool), abi.encodeCall(IAavePool.withdraw, (asset, amount, account)));
-            p.increasesRisk = debtBase > 0;
-        } else if (kind == Kind.Borrow) {
-            if (amount == 0) revert ZeroAmount();
-            p.calls = new PlannedCall[](1);
-            p.calls[0] = PlannedCall(
-                address(pool),
-                abi.encodeCall(IAavePool.borrow, (asset, amount, VARIABLE_RATE, 0, account))
-            );
-            p.increasesRisk = true;
-        } else {
-            uint256 debt = variableDebtOf(account);
-            if (debt == 0) revert NoDebt();
-            uint256 pay;
-            uint256 repayArg;
-            if (kind == Kind.Repay) {
-                if (amount == 0) revert ZeroAmount();
-                pay = amount < debt ? amount : debt;
-                repayArg = pay;
-            } else if (kind == Kind.RepayAll) {
-                pay = debt;
-                repayArg = type(uint256).max;
-            } else {
-                uint256 balance = IERC20(asset).balanceOf(account);
-                pay = balance < debt ? balance : debt;
-                if (pay == 0) revert ZeroAmount();
-                repayArg = pay;
-            }
-            p.calls = new PlannedCall[](2);
-            p.calls[0] = PlannedCall(asset, abi.encodeCall(IERC20.approve, (address(pool), pay)));
-            p.calls[1] = PlannedCall(
-                address(pool), abi.encodeCall(IAavePool.repay, (asset, repayArg, VARIABLE_RATE, account))
-            );
-            p.approvalTokens = _one(asset);
+            return _planSupply(account, asset, amount, kind == Kind.SupplyCollateral, debtBase);
         }
+        if (kind == Kind.Withdraw) return _planWithdraw(account, asset, amount, debtBase);
+        if (kind == Kind.Borrow) return _planBorrow(account, asset, amount);
+        return _planRepay(kind, account, asset, amount);
+    }
+
+    function _planSupply(
+        address account,
+        address asset,
+        uint256 amount,
+        bool collateral,
+        uint256 debtBase
+    ) internal view returns (Plan memory p) {
+        if (amount == 0) revert ZeroAmount();
+        if (collateral && dataProvider.getDebtCeiling(asset) != 0) {
+            revert IsolationModeUnsupported(asset);
+        }
+        p.calls = new PlannedCall[](collateral ? 3 : 2);
+        p.calls[0] = PlannedCall(asset, abi.encodeCall(IERC20.approve, (address(pool), amount)));
+        p.calls[1] = PlannedCall(
+            address(pool), abi.encodeCall(IAavePool.supply, (asset, amount, account, 0))
+        );
+        if (collateral) {
+            p.calls[2] = PlannedCall(
+                address(pool),
+                abi.encodeCall(IAavePool.setUserUseReserveAsCollateral, (asset, true))
+            );
+        }
+        p.approvalTokens = _one(asset);
+        p.increasesRisk = collateral ? debtBase == 0 : true;
+    }
+
+    function _planWithdraw(address account, address asset, uint256 amount, uint256 debtBase)
+        internal
+        view
+        returns (Plan memory p)
+    {
+        if (amount == 0) revert ZeroAmount();
+        p.calls = new PlannedCall[](1);
+        p.calls[0] = PlannedCall(
+            address(pool), abi.encodeCall(IAavePool.withdraw, (asset, amount, account))
+        );
+        p.increasesRisk = debtBase > 0;
+    }
+
+    function _planBorrow(address account, address asset, uint256 amount)
+        internal
+        view
+        returns (Plan memory p)
+    {
+        if (amount == 0) revert ZeroAmount();
+        p.calls = new PlannedCall[](1);
+        p.calls[0] = PlannedCall(
+            address(pool),
+            abi.encodeCall(IAavePool.borrow, (asset, amount, VARIABLE_RATE, 0, account))
+        );
+        p.increasesRisk = true;
+    }
+
+    function _planRepay(Kind kind, address account, address asset, uint256 amount)
+        internal
+        view
+        returns (Plan memory p)
+    {
+        uint256 debt = variableDebtOf(account);
+        if (debt == 0) revert NoDebt();
+        uint256 pay;
+        uint256 repayArg;
+        if (kind == Kind.Repay) {
+            if (amount == 0) revert ZeroAmount();
+            pay = amount < debt ? amount : debt;
+            repayArg = pay;
+        } else if (kind == Kind.RepayAll) {
+            pay = debt;
+            repayArg = type(uint256).max;
+        } else {
+            uint256 balance = IERC20(asset).balanceOf(account);
+            pay = balance < debt ? balance : debt;
+            if (pay == 0) revert ZeroAmount();
+            repayArg = pay;
+        }
+        p.calls = new PlannedCall[](2);
+        p.calls[0] = PlannedCall(asset, abi.encodeCall(IERC20.approve, (address(pool), pay)));
+        p.calls[1] = PlannedCall(
+            address(pool),
+            abi.encodeCall(IAavePool.repay, (asset, repayArg, VARIABLE_RATE, account))
+        );
+        p.approvalTokens = _one(asset);
     }
 
     function variableDebtOf(address account) public view returns (uint256) {

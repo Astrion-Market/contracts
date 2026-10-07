@@ -65,18 +65,29 @@ contract MorphoBlueModule is IActionModule {
     function plan(address account, bytes32 marketScope, address, bytes calldata action)
         external
         view
-        returns (Plan memory p)
+        returns (Plan memory)
     {
         if (marketScope != marketId) revert WrongMarket();
-        MarketParams memory params = marketParams();
         (,,,, uint128 lastUpdate,) = morpho.market(marketId);
         if (lastUpdate == 0) revert MarketNotCreated();
         (Kind kind, uint256 amount) = abi.decode(action, (Kind, uint256));
-        (uint256 supplyShares, uint128 borrowShares, uint128 collateral) =
-            morpho.position(marketId, account);
+        if (kind == Kind.Supply || kind == Kind.SupplyCollateral || kind == Kind.Borrow) {
+            return _planIncrease(kind, account, amount);
+        }
+        if (kind == Kind.Withdraw || kind == Kind.WithdrawCollateral) {
+            return _planWithdraw(kind, account, amount);
+        }
+        return _planRepay(kind, account, amount);
+    }
 
+    function _planIncrease(Kind kind, address account, uint256 amount)
+        internal
+        view
+        returns (Plan memory p)
+    {
+        _requireAmount(amount);
+        MarketParams memory params = marketParams();
         if (kind == Kind.Supply) {
-            _requireAmount(amount);
             p = _withApproval(
                 loanToken,
                 amount,
@@ -84,47 +95,68 @@ contract MorphoBlueModule is IActionModule {
             );
             p.increasesRisk = true;
         } else if (kind == Kind.SupplyCollateral) {
-            _requireAmount(amount);
+            (, uint128 borrowShares,) = morpho.position(marketId, account);
             p = _withApproval(
                 collateralToken,
                 amount,
                 abi.encodeCall(IMorphoBlue.supplyCollateral, (params, amount, account, ""))
             );
             p.increasesRisk = borrowShares == 0;
-        } else if (kind == Kind.Withdraw) {
-            _requireAmount(amount);
-            bytes memory data = amount == type(uint256).max
-                ? abi.encodeCall(IMorphoBlue.withdraw, (params, 0, supplyShares, account, account))
-                : abi.encodeCall(IMorphoBlue.withdraw, (params, amount, 0, account, account));
-            p = _single(data);
-        } else if (kind == Kind.WithdrawCollateral) {
-            _requireAmount(amount);
+        } else {
+            p = _single(abi.encodeCall(IMorphoBlue.borrow, (params, amount, 0, account, account)));
+            p.increasesRisk = true;
+        }
+    }
+
+    function _planWithdraw(Kind kind, address account, uint256 amount)
+        internal
+        view
+        returns (Plan memory p)
+    {
+        _requireAmount(amount);
+        MarketParams memory params = marketParams();
+        (uint256 supplyShares, uint128 borrowShares, uint128 collateral) =
+            morpho.position(marketId, account);
+        if (kind == Kind.Withdraw) {
+            p = _single(
+                amount == type(uint256).max
+                    ? abi.encodeCall(
+                        IMorphoBlue.withdraw, (params, 0, supplyShares, account, account)
+                    )
+                    : abi.encodeCall(IMorphoBlue.withdraw, (params, amount, 0, account, account))
+            );
+        } else {
             uint256 assets = amount == type(uint256).max ? collateral : amount;
             p = _single(
                 abi.encodeCall(IMorphoBlue.withdrawCollateral, (params, assets, account, account))
             );
             p.increasesRisk = borrowShares > 0;
-        } else if (kind == Kind.Borrow) {
-            _requireAmount(amount);
-            p = _single(abi.encodeCall(IMorphoBlue.borrow, (params, amount, 0, account, account)));
-            p.increasesRisk = true;
-        } else {
-            if (borrowShares == 0) revert NoDebt();
-            uint256 debt = MorphoBalances.expectedBorrowAssets(morpho, params, account);
-            uint256 pay = kind == Kind.RepayAll
-                ? debt
-                : kind == Kind.Repay ? amount : IERC20(loanToken).balanceOf(account);
-            _requireAmount(pay);
-            p = pay >= debt
-                ? _withApproval(
-                    loanToken,
-                    debt,
-                    abi.encodeCall(IMorphoBlue.repay, (params, 0, borrowShares, account, ""))
-                )
-                : _withApproval(
-                    loanToken, pay, abi.encodeCall(IMorphoBlue.repay, (params, pay, 0, account, ""))
-                );
         }
+    }
+
+    function _planRepay(Kind kind, address account, uint256 amount)
+        internal
+        view
+        returns (Plan memory p)
+    {
+        MarketParams memory params = marketParams();
+        (, uint128 borrowShares,) = morpho.position(marketId, account);
+        if (borrowShares == 0) revert NoDebt();
+        uint256 debt = MorphoBalances.expectedBorrowAssets(morpho, params, account);
+        uint256 pay = kind == Kind.RepayAll
+            ? debt
+            : kind == Kind.Repay ? amount : IERC20(loanToken).balanceOf(account);
+        _requireAmount(pay);
+        if (pay >= debt) {
+            return _withApproval(
+                loanToken,
+                debt,
+                abi.encodeCall(IMorphoBlue.repay, (params, 0, borrowShares, account, ""))
+            );
+        }
+        return _withApproval(
+            loanToken, pay, abi.encodeCall(IMorphoBlue.repay, (params, pay, 0, account, ""))
+        );
     }
 
     function _withApproval(address token, uint256 amount, bytes memory call)
