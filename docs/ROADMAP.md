@@ -1,32 +1,59 @@
 # Roadmap
 
-## Milestone 1: Accounting Hardening
+Direction: Stellar users reach Aave V3, Morpho Blue and (provisionally)
+Compound III on Base and Ethereum, with native USDC moved by Circle CCTP. See
+[ADR-0001](adr/0001-crosschain-lending-direction.md) and the
+[architecture](architecture/crosschain.md).
 
-- Expand CorePool invariant tests into random operation sequences.
-- Add integration tests for CorePool, OracleAdapter, and InterestRateModel.
-- Add reserve withdrawal design and tests before exposing any reserve movement.
+Success is measured by merged, tested functionality and published evidence,
+never by commit count. A route is "supported" only when its release gate has
+evidence; disabled routes stay visible with a reason.
 
-## Milestone 2: Liquidation Completeness
+## Phase 1: product and API agreement
 
-- Add CorePool collateral seizure API with a liquidation-engine whitelist.
-- Complete end-to-end liquidation tests with price shock scenarios.
-- Add keeper examples using `liquidate_with_limits`.
+- C01 Architecture, scope and ADR (this document set).
+- C02 Quarantine legacy Soroban deployments; record review findings.
+- C03 Versioned intent, quote, status and receipt schemas in `spec/`.
+- C04 Pinned Foundry workspace under `evm/`; Rust and EVM CI run separately.
+- C05 Chain, token and protocol manifests in `deployments/crosschain/`, all
+  routes disabled by default.
 
-## Milestone 3: Governance And Upgrades
+## Phase 2: transport proof
 
-- Replace direct admin upgrades with timelock or multisig-controlled flows.
-- Add storage migration tests for every contract family.
-- Publish upgrade runbooks per contract.
+- C06 Stellar CCTP codecs (7↔6 decimal conversion, recipients, hook data).
+- C07 Reproducible bidirectional CCTP testnet harness (Stellar ↔ Base Sepolia).
+- C08 Isolated, user-owned EVM execution accounts.
+- C09 Bounded signed intents and pinned protocol modules.
+- C10 CCTP receipt reconciliation with recoverable destination execution.
 
-## Milestone 4: Simulation And Fuzzing
+## Phase 3: lending proof
 
-- Build deterministic economic model scenarios for utilization, rates, and
-  reserves.
-- Add fuzz harnesses for public entrypoints and oracle prices.
-- Save failing seeds as regression tests.
+- C11 Aave V3, C12 Morpho Blue, C13 Compound III modules with fork tests.
+- C14 Return path: EVM withdrawals and borrow proceeds to Stellar.
+- C15 Repayment and unwind across all adapters, plus direct EVM fallback.
 
-## Milestone 5: External Integrations
+## Phase 4: observable alpha and handoff
 
-- Stabilize event schemas.
-- Publish SDK examples for common flows.
-- Add gas estimates and WASM size regression reports for frontends.
+- C16 SDK events and position read models.
+- C17 Resumable relayer and indexer service.
+- C18 Cross-chain failure invariants and adversarial tests.
+- C19 Reproducible alpha deployments and route release gates.
+- C20 Contributor work packages and alpha evidence.
+
+## Evidence levels
+
+| Level | Means | Does not mean |
+|---|---|---|
+| Unit / mock | Logic is correct against our own fixtures | Anything about real protocols or bridges |
+| Fork | Behaviour against real protocol bytecode at a pinned block | That a bridge transfer arrives |
+| Testnet | A real CCTP transfer on test networks, with tx hashes | Mainnet liquidity, fees or protocol state |
+| Production | Reviewed, explicitly released, capped mainnet route | That every other route is ready |
+
+A testnet bridge run plus a fork lending test are two separate pieces of
+evidence and are never presented as one production round trip.
+
+## Not planned for the first release
+
+Pooled cross-chain collateral, automatic leverage, novel debt receipts,
+Stellar-only signing (separate extension with its own review), Aave V4, Morpho
+Midnight, or every Morpho vault generation.
