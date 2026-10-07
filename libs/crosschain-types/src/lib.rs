@@ -9,12 +9,15 @@
 
 extern crate alloc;
 
+pub mod cctp;
 pub mod error;
 pub mod intent;
 pub mod network;
 pub mod receipt;
+pub mod strkey;
 mod util;
 
+pub use cctp::CodecError;
 pub use error::ValidationError;
 pub use intent::{intent_id, validate_batch, validate_intent, Action, Amount, Intent, Protocol};
 pub use network::{network, Environment, Network, NetworkKind, NETWORKS};

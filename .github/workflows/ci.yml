@@ -90,3 +90,17 @@ jobs:
       - name: Fork tests
         if: env.BASE_RPC_URL != '' || env.ETH_RPC_URL != ''
         run: forge test --match-path 'test/fork/*' -vv
+
+  # ─── TypeScript SDK: same vectors as libs/crosschain-types ────────────────
+  sdk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Test
+        run: bun test
