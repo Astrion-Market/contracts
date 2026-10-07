@@ -70,3 +70,29 @@ move funds.
 - Tests: `evm/test/account/ExecutionIntent.t.sol` covers wrong owner, chain,
   account and market, replay, revocation, expiry, module/target/recipient
   substitution, excess allowance, self-calls, reentrancy, fee caps and pauses.
+
+## Bridge-funded execution (C10)
+
+- Inbound CCTP transfers set **`mintRecipient = destinationCaller = account`**.
+  Only the account can complete its own mint, so no observer can front-run
+  `receiveMessage` or substitute a different transfer. A message that allows
+  anyone to mint (`destinationCaller = 0`) is not recorded. Funds minted that
+  way still belong to the account and are recovered directly by the owner.
+- `receiveTransfer(message, attestation)` is permissionless (USDC can only land
+  in the account). It records one receipt per
+  `transferId = keccak256(abi.encode(sourceDomain, nonce))` with the
+  **measured** balance delta, which must equal `amount − feeExecuted`.
+  A duplicate receipt reverts.
+- An intent with `transferId ≠ 0` runs only through
+  `executeFundedIntent`, which mints if needed, checks that the minted transfer
+  **is** the signed `transferId`, and runs the action in a `try` self-call.
+  If the action reverts, has expired or carries a bad signature, the mint stays,
+  the receipt stays unconsumed, the intent nonce is not used, and the funds
+  remain in the account for the owner or a fresh intent.
+- A receipt funds at most one executed intent (`consumed`). A consumed CCTP
+  nonce is never treated as a new transfer.
+- Accepted limitation: a relayer can give too little gas so the action fails
+  after the mint (63/64 rule). The result is the same safe state: funds sit in
+  the account, the receipt is unconsumed, and the action can be retried.
+
+Tests: `evm/test/account/FundedExecution.t.sol`.

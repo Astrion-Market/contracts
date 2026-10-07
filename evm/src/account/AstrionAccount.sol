@@ -9,6 +9,8 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
 import {IActionModule} from "../interfaces/IActionModule.sol";
+import {IMessageTransmitterV2} from "../interfaces/IMessageTransmitterV2.sol";
+import {CctpMessageV2} from "../libraries/CctpMessageV2.sol";
 import {RoutePolicy} from "./RoutePolicy.sol";
 
 /// @title AstrionAccount
@@ -27,6 +29,13 @@ import {RoutePolicy} from "./RoutePolicy.sol";
 /// Relayed execution (ADR-0002): a relayer submits an owner-signed
 /// `ExecutionIntent`. The account checks it and runs the module plan in its
 /// own context under target, selector, approval, recipient and fee bounds.
+///
+/// Bridge-funded execution (C10): CCTP mints USDC to this account with the
+/// account as `destinationCaller`, so only the account can complete its own
+/// mint. Each mint is recorded once as a receipt keyed by (sourceDomain,
+/// nonce) with the measured received amount. A funded intent is bound to one
+/// exact receipt; if the action fails or has expired, the mint still stands
+/// and the USDC stays here, recoverable by the owner.
 contract AstrionAccount is ReentrancyGuard, EIP712 {
     using SafeERC20 for IERC20;
 
@@ -57,9 +66,23 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
         "uint256 deadline,bytes32 transferId)"
     );
 
+    /// @notice One recorded CCTP mint into this account.
+    struct TransferReceipt {
+        bool recorded;
+        bool consumed; // bound to an executed intent
+        uint32 sourceDomain;
+        bytes32 nonce;
+        uint256 burnedAmount; // message amount (6 decimals)
+        uint256 feeExecuted;
+        uint256 received; // measured balance delta
+    }
+
     address public immutable owner;
     address public immutable factory;
     RoutePolicy public immutable policy;
+    IMessageTransmitterV2 public immutable messageTransmitter;
+    IERC20 public immutable usdc;
+    uint32 public immutable localDomain;
     bytes32 public immutable protocol;
     bytes32 public immutable marketScope;
     uint32 public immutable version;
@@ -67,9 +90,21 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
     /// @notice Consumed or revoked intent nonces.
     mapping(uint256 nonce => bool) public nonceUsed;
 
+    /// @notice CCTP receipts by transferId = keccak256(abi.encode(sourceDomain, nonce)).
+    mapping(bytes32 transferId => TransferReceipt) public receipts;
+
     event Executed(address indexed target, uint256 value, bytes4 selector);
     event IntentExecuted(uint256 indexed nonce, address indexed module, address relayer, uint256 fee);
     event NonceRevoked(uint256 indexed nonce);
+    event TransferReceived(
+        bytes32 indexed transferId,
+        uint32 sourceDomain,
+        bytes32 nonce,
+        uint256 burnedAmount,
+        uint256 feeExecuted,
+        uint256 received
+    );
+    event FundedActionFailed(bytes32 indexed transferId, uint256 indexed nonce, bytes reason);
 
     error NotOwner();
     error ZeroOwner();
@@ -88,6 +123,14 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
     error ExcessAllowance(address token);
     error InvalidRecipient();
     error TransferBindingRequired();
+    error NotSelf();
+    error BadTransferFields();
+    error AlreadyReceived(bytes32 transferId);
+    error MintFailed();
+    error ReceiptMismatch(uint256 expected, uint256 received);
+    error TransferMismatch(bytes32 expected, bytes32 actual);
+    error UnknownTransfer();
+    error TransferAlreadyConsumed();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -97,6 +140,9 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
     constructor(
         address owner_,
         RoutePolicy policy_,
+        IMessageTransmitterV2 messageTransmitter_,
+        IERC20 usdc_,
+        uint32 localDomain_,
         bytes32 protocol_,
         bytes32 marketScope_,
         uint32 version_
@@ -105,6 +151,9 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
         owner = owner_;
         factory = msg.sender;
         policy = policy_;
+        messageTransmitter = messageTransmitter_;
+        usdc = usdc_;
+        localDomain = localDomain_;
         protocol = protocol_;
         marketScope = marketScope_;
         version = version_;
@@ -156,9 +205,98 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
     ) external nonReentrant {
         // Bridge-funded intents must go through the transfer-bound path.
         if (intent.transferId != bytes32(0)) revert TransferBindingRequired();
-        _consumeIntent(intent, action, signature, fee);
+        _consumeIntent(intent, action, signature, fee, msg.sender);
         _runPlan(intent, action);
-        _payFee(intent, fee);
+        _payFee(intent, fee, msg.sender);
+    }
+
+    // ─── bridge-funded path (C10) ────────────────────────────────────────────
+
+    /// @notice Complete a CCTP mint into this account and record its receipt.
+    /// Permissionless: the USDC can only land here. Duplicate receipts revert.
+    function receiveTransfer(bytes calldata message, bytes calldata attestation)
+        external
+        nonReentrant
+        returns (bytes32 transferId)
+    {
+        return _receiveTransfer(message, attestation);
+    }
+
+    /// @notice Mint (if not yet recorded) and execute an intent bound to that
+    /// exact transfer. If the action fails (revert, expiry, bad signature,
+    /// pause) the mint still stands, the receipt stays unconsumed and the
+    /// funds remain in this account. Returns whether the action executed.
+    function executeFundedIntent(
+        ExecutionIntent calldata intent,
+        bytes calldata action,
+        bytes calldata signature,
+        uint256 fee,
+        bytes calldata message,
+        bytes calldata attestation
+    ) external nonReentrant returns (bool executed) {
+        if (intent.transferId == bytes32(0)) revert TransferBindingRequired();
+        if (!receipts[intent.transferId].recorded) {
+            bytes32 received = _receiveTransfer(message, attestation);
+            if (received != intent.transferId) revert TransferMismatch(intent.transferId, received);
+        }
+        if (receipts[intent.transferId].consumed) revert TransferAlreadyConsumed();
+        try this.runFundedIntent(intent, action, signature, fee, msg.sender) {
+            executed = true;
+        } catch (bytes memory reason) {
+            emit FundedActionFailed(intent.transferId, intent.nonce, reason);
+        }
+    }
+
+    /// @dev Self-call so a failing action rolls back only itself, never the
+    /// mint. Runs inside executeFundedIntent's reentrancy lock.
+    function runFundedIntent(
+        ExecutionIntent calldata intent,
+        bytes calldata action,
+        bytes calldata signature,
+        uint256 fee,
+        address submitter
+    ) external {
+        if (msg.sender != address(this)) revert NotSelf();
+        _consumeIntent(intent, action, signature, fee, submitter);
+        receipts[intent.transferId].consumed = true;
+        _runPlan(intent, action);
+        _payFee(intent, fee, submitter);
+    }
+
+    function transferIdOf(uint32 sourceDomain, bytes32 nonce) public pure returns (bytes32) {
+        return keccak256(abi.encode(sourceDomain, nonce));
+    }
+
+    function _receiveTransfer(bytes calldata message, bytes calldata attestation)
+        internal
+        returns (bytes32 transferId)
+    {
+        CctpMessageV2.Burn memory b = CctpMessageV2.decode(message);
+        bytes32 self = CctpMessageV2.toBytes32(address(this));
+        if (
+            b.destinationDomain != localDomain || b.mintRecipient != self
+                || b.destinationCaller != self
+        ) revert BadTransferFields();
+
+        transferId = transferIdOf(b.sourceDomain, b.nonce);
+        if (receipts[transferId].recorded) revert AlreadyReceived(transferId);
+
+        uint256 before = usdc.balanceOf(address(this));
+        if (!messageTransmitter.receiveMessage(message, attestation)) revert MintFailed();
+        uint256 received = usdc.balanceOf(address(this)) - before;
+        uint256 expected = b.amount - b.feeExecuted;
+        if (received != expected) revert ReceiptMismatch(expected, received);
+
+        receipts[transferId] = TransferReceipt({
+            recorded: true,
+            consumed: false,
+            sourceDomain: b.sourceDomain,
+            nonce: b.nonce,
+            burnedAmount: b.amount,
+            feeExecuted: b.feeExecuted,
+            received: received
+        });
+        emit TransferReceived(transferId, b.sourceDomain, b.nonce, b.amount, b.feeExecuted, received);
     }
 
     function intentDigest(ExecutionIntent calldata intent) public view returns (bytes32) {
@@ -175,11 +313,12 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
         ExecutionIntent calldata intent,
         bytes calldata action,
         bytes calldata signature,
-        uint256 fee
+        uint256 fee,
+        address submitter
     ) internal {
         if (block.timestamp > intent.deadline) revert IntentExpired();
         if (nonceUsed[intent.nonce]) revert NonceAlreadyUsed();
-        if (intent.relayer != address(0) && msg.sender != intent.relayer) revert WrongRelayer();
+        if (intent.relayer != address(0) && submitter != intent.relayer) revert WrongRelayer();
         if (fee > intent.maxFee) revert FeeAboveCap();
         if (keccak256(action) != intent.actionHash) revert ActionHashMismatch();
         if (intent.recipient == address(0)) revert InvalidRecipient();
@@ -239,9 +378,9 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
         }
     }
 
-    function _payFee(ExecutionIntent calldata intent, uint256 fee) internal {
-        if (fee > 0) IERC20(intent.feeToken).safeTransfer(msg.sender, fee);
-        emit IntentExecuted(intent.nonce, intent.module, msg.sender, fee);
+    function _payFee(ExecutionIntent calldata intent, uint256 fee, address submitter) internal {
+        if (fee > 0) IERC20(intent.feeToken).safeTransfer(submitter, fee);
+        emit IntentExecuted(intent.nonce, intent.module, submitter, fee);
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────

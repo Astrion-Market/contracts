@@ -6,6 +6,8 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {AstrionAccount} from "../../src/account/AstrionAccount.sol";
 import {AstrionAccountFactory} from "../../src/account/AstrionAccountFactory.sol";
 import {RoutePolicy} from "../../src/account/RoutePolicy.sol";
+import {IMessageTransmitterV2} from "../../src/interfaces/IMessageTransmitterV2.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ProtocolIds} from "../../src/libraries/ProtocolIds.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 import {MockLendingPool} from "../mocks/MockLendingPool.sol";
@@ -41,8 +43,10 @@ contract ExecutionIntentTest is Test {
     function setUp() public {
         alice = vm.addr(alicePk);
         policy = new RoutePolicy(guardian);
-        factory = new AstrionAccountFactory(policy);
         usdc = new MockERC20("USD Coin", "USDC", 6);
+        factory = new AstrionAccountFactory(
+            policy, IMessageTransmitterV2(address(0)), IERC20(address(usdc)), 6
+        );
         pool = new MockLendingPool();
         usdc.mint(address(pool), 1_000_000e6);
         module = new MockPoolModule(address(pool), address(usdc));

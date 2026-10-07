@@ -2,7 +2,9 @@
 pragma solidity 0.8.30;
 
 import {AstrionAccount} from "./AstrionAccount.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {RoutePolicy} from "./RoutePolicy.sol";
+import {IMessageTransmitterV2} from "../interfaces/IMessageTransmitterV2.sol";
 import {ProtocolIds} from "../libraries/ProtocolIds.sol";
 
 /// @title AstrionAccountFactory
@@ -14,6 +16,10 @@ import {ProtocolIds} from "../libraries/ProtocolIds.sol";
 /// deploys reads route pauses from the same immutable `policy`.
 contract AstrionAccountFactory {
     RoutePolicy public immutable policy;
+    /// CCTP wiring shared by every account on this chain (from the manifest).
+    IMessageTransmitterV2 public immutable messageTransmitter;
+    IERC20 public immutable usdc;
+    uint32 public immutable localDomain;
 
     event AccountCreated(
         address indexed account,
@@ -26,8 +32,16 @@ contract AstrionAccountFactory {
     error UnsupportedProtocol(bytes32 protocol);
     error ZeroVersion();
 
-    constructor(RoutePolicy policy_) {
+    constructor(
+        RoutePolicy policy_,
+        IMessageTransmitterV2 messageTransmitter_,
+        IERC20 usdc_,
+        uint32 localDomain_
+    ) {
         policy = policy_;
+        messageTransmitter = messageTransmitter_;
+        usdc = usdc_;
+        localDomain = localDomain_;
     }
 
     /// @notice Deploy (or return the existing) account for a scope.
@@ -40,7 +54,7 @@ contract AstrionAccountFactory {
         account = predictAccount(owner, protocol, marketScope, version);
         if (account.code.length > 0) return account;
         AstrionAccount deployed = new AstrionAccount{salt: salt(owner, protocol, marketScope, version)}(
-            owner, policy, protocol, marketScope, version
+            owner, policy, messageTransmitter, usdc, localDomain, protocol, marketScope, version
         );
         assert(address(deployed) == account);
         emit AccountCreated(account, owner, protocol, marketScope, version);
@@ -64,7 +78,16 @@ contract AstrionAccountFactory {
         bytes32 initCodeHash = keccak256(
             abi.encodePacked(
                 type(AstrionAccount).creationCode,
-                abi.encode(owner, policy, protocol, marketScope, version)
+                abi.encode(
+                    owner,
+                    policy,
+                    messageTransmitter,
+                    usdc,
+                    localDomain,
+                    protocol,
+                    marketScope,
+                    version
+                )
             )
         );
         return address(
