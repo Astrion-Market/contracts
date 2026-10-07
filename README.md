@@ -31,7 +31,11 @@ leverage, Stellar-only signing (a separate, separately reviewed extension).
 - [Architecture: Stellar cross-chain lending](docs/architecture/crosschain.md):
   custody, authority, debt, collateral, fees and recovery for each journey.
 - [ADR-0001: cross-chain lending direction](docs/adr/0001-crosschain-lending-direction.md)
-- [Roadmap](docs/ROADMAP.md)
+- [ADR-0002: execution accounts and bounded intents](docs/adr/0002-account-execution-model.md)
+- [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md) · [Evidence index](docs/evidence/INDEX.md)
+- [Reproducible demos](docs/DEMO.md) · [Known limitations](docs/KNOWN_LIMITATIONS.md)
+- [Security policy](SECURITY.md) · [Audit scope](docs/AUDIT_SCOPE.md) · [Maintainers](docs/MAINTAINERS.md)
+- Ops: [alpha deployment](docs/ops/ALPHA_DEPLOYMENT.md), [incidents](docs/ops/INCIDENT_RUNBOOK.md), [direct owner actions](docs/ops/DIRECT_OWNER_ACTIONS.md)
 - [Legacy Soroban lending engine (frozen)](docs/legacy/SOROBAN_ENGINE.md)
 - [Contributing](docs/CONTRIBUTING.md) · [Security checklist](docs/SECURITY_CHECKLIST.md)
 
@@ -39,7 +43,7 @@ leverage, Stellar-only signing (a separate, separately reviewed extension).
 
 ```
 contracts/      Soroban contracts of the legacy lending engine (frozen, see below)
-libs/           Rust libraries (math, market types; cross-chain types planned)
+libs/           Rust libraries (math, market types, crosschain-types)
 deployments/    Per-network deployment state (crosschain/ manifests planned)
 ops/            Deployment and operations scripts
 mk/             Makefile fragments (all build/test/deploy targets)
@@ -47,9 +51,10 @@ sim/            Legacy testnet simulation harness
 docs/           Architecture, ADRs, roadmap, security, legacy docs
 ```
 
-Planned additions (see roadmap): `evm/` (Foundry), `spec/` (versioned schemas),
-`libs/crosschain-types/`, `deployments/crosschain/`, `ops/crosschain/`, `sdk/`,
-`services/`.
+Cross-chain layer: `evm/` (Foundry accounts, modules, lenses, scripts),
+`spec/` (versioned schemas and shared vectors), `libs/crosschain-types/`,
+`sdk/` (TypeScript), `services/relayer/`, `ops/crosschain/`,
+`deployments/crosschain/`.
 
 ## The legacy Soroban lending engine
 
@@ -64,10 +69,12 @@ findings are tracked before any reuse. Full documentation:
 ## Build and test
 
 ```bash
-make build     # Soroban WASM
-make test      # Rust workspace tests
-make clippy
-make fmt
+make build                 # Soroban WASM
+make test                  # Rust workspace tests
+make evm-deps evm-test     # Solidity unit, fuzz, invariants
+make sdk-abi sdk-test      # TypeScript SDK
+make relayer-test          # relayer service
+make evm-fork-test         # needs BASE_RPC_URL
 ```
 
 ## License

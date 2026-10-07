@@ -1,6 +1,46 @@
 # Contributing to Astrion Contracts
 
-Thank you for your interest in contributing to Astrion — the hybrid lending protocol for Stellar. This guide covers everything you need: local setup, the deployment system, the simulation harness, branch and commit conventions, testing requirements, and the PR process.
+Thank you for your interest in contributing to Astrion: Stellar access to EVM lending markets. This guide covers everything you need: local setup, the deployment system, the simulation harness, branch and commit conventions, testing requirements, and the PR process.
+
+---
+
+## Cross-chain work: start here
+
+Astrion is now an execution layer from Stellar to EVM lending markets
+([ADR-0001](adr/0001-crosschain-lending-direction.md)). New work lives in
+`evm/`, `spec/`, `libs/crosschain-types/`, `sdk/`, `services/relayer/`,
+`ops/crosschain/` and `deployments/crosschain/`. The Soroban sections further
+down describe the **frozen legacy engine**.
+
+| Tool | Version |
+|---|---|
+| Rust + `wasm32v1-none` | stable (CI) |
+| Stellar CLI | ≥ 26 |
+| Foundry | 1.7.1 |
+| Bun | 1.4.2 |
+| jq | any |
+
+```bash
+make evm-deps                  # pinned forge-std / OpenZeppelin submodules
+make test                      # Rust (legacy engine + crosschain-types)
+make evm-build evm-test        # Solidity unit, fuzz, invariant
+make sdk-abi sdk-test          # regenerate ABIs from evm/out, run SDK tests
+make relayer-test              # relayer restart/reorg/property tests
+BASE_RPC_URL=... make evm-fork-test   # Aave/Morpho/Compound/lifecycle on a Base fork
+```
+
+How to pick up work:
+1. Choose an open issue made with the **Work package** template. Each has a
+   bounded scope, the files involved and acceptance evidence.
+2. Comment to claim it. Maintainers assign it.
+3. Follow the evidence rules in [`docs/evidence/INDEX.md`](evidence/INDEX.md).
+   A fork pass is not a testnet pass, and mocks never satisfy a live gate.
+4. Security-relevant changes (accounts, intents, modules, codecs, relayer
+   signing) need a second reviewer from [`MAINTAINERS.md`](MAINTAINERS.md).
+
+Rules specific to this repo: keep code comments minimal (rationale goes in ADRs
+and commit messages), add shared vectors to `spec/fixtures/` when touching a
+codec, and never add a route as `enabled` without passing its release gate.
 
 ---
 

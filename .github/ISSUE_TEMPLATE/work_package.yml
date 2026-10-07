@@ -1,0 +1,30 @@
+name: Work package
+description: A bounded, claimable unit of work with acceptance evidence.
+labels: ["work-package"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Stellar integration, Protocol integration, Infrastructure, Security, Documentation/QA]
+    validations: { required: true }
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What changes, and which files. Keep it to one coherent change.
+    validations: { required: true }
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance evidence
+      description: Tests, fixtures or tx hashes required. Say which evidence level applies (unit / fork / testnet / production).
+    validations: { required: true }
+  - type: input
+    id: estimate
+    attributes:
+      label: Estimate (engineer-days)
+  - type: textarea
+    id: deps
+    attributes:
+      label: Dependencies

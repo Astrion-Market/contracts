@@ -1,0 +1,16 @@
+name: Route or market request
+description: Propose enabling a protocol/chain/market route.
+labels: ["route"]
+body:
+  - type: input
+    id: route
+    attributes:
+      label: Route id
+      description: e.g. morpho-blue:base with market id
+    validations: { required: true }
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Market parameters, oracle, LLTV/caps, liquidity snapshot (dated), fork test results.
+    validations: { required: true }

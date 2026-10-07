@@ -1,0 +1,26 @@
+name: Bug report
+description: Something behaves differently from the docs or specs (no fund-risk issues; use a security advisory).
+labels: ["bug"]
+body:
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+    validations: { required: true }
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options: [evm, spec / crosschain-types, sdk, relayer, ops/crosschain, legacy soroban]
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Minimal steps or a failing test.
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs. actual
+    validations: { required: true }

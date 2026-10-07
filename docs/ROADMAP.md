@@ -52,6 +52,22 @@ evidence; disabled routes stay visible with a reason.
 A testnet bridge run plus a fork lending test are two separate pieces of
 evidence and are never presented as one production round trip.
 
+## Next wave (after C20)
+
+Dates are relative to funding kickoff. They are not announced program dates.
+
+| Milestone | Window | Deliverables | Exit evidence |
+|---|---|---|---|
+| W1 Close alpha gaps | Weeks 1–2 | Verify all manifests on-chain; run live CCTP testnet both ways; remediate or keep frozen legacy findings; account recovery runbooks | Signed scope register, published testnet tx evidence, fork suites green |
+| W2 Complete product flows | Weeks 3–4 | Approve Base markets for all three protocols; optional bounded collateral swap | Lifecycle evidence per route, including failure recovery |
+| W3 Harden operations | Weeks 5–6 | Relayer on real RPCs; fee/latency measurement; incident drills | Restart, stuck-transfer and reconciliation reports; cost/latency percentiles |
+| W4 Independent review | Weeks 7–8 | External review of `docs/AUDIT_SCOPE.md`; remediation; retest | External report with critical/high findings closed |
+| W5 Capped Base pilot | Weeks 9–10 | `release-approval.json`; conservative route limits | Real supply/borrow/repay/withdraw/return receipts; daily reconciliation |
+| W6 Ethereum + handoff | Weeks 11–12 | Ethereum fork suites and selected routes; SDK release | Six-combination acceptance matrix, each enabled route backed by evidence |
+
+Separate extension: Stellar-only authorization (Axelar-authenticated commands
+or a reviewed smart-account signer) with its own security review.
+
 ## Not planned for the first release
 
 Pooled cross-chain collateral, automatic leverage, novel debt receipts,
