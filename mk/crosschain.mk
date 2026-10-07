@@ -43,3 +43,7 @@ sdk-abi:
 
 sdk-vectors:
 	cd sdk && bun scripts/gen-vectors.ts
+
+.PHONY: relayer-test
+relayer-test:
+	cd services/relayer && bun install && bun test

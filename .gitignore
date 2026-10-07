@@ -18,3 +18,8 @@ evm/broadcast
 
 # CCTP harness checkpoints (signed envelopes, messages; evidence is rendered separately)
 ops/crosschain/runs/
+
+# Service runtime state
+services/**/*.sqlite*
+services/**/node_modules/
+sdk/node_modules/
