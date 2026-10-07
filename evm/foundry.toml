@@ -28,8 +28,18 @@ runs = 256
 # Failing seeds are persisted so CI can replay them.
 failure_persist_dir = "cache/fuzz"
 
+[profile.default.invariant]
+runs = 64
+depth = 64
+fail_on_revert = false
+failure_persist_dir = "cache/invariant"
+
 [profile.ci.fuzz]
 runs = 2000
+
+[profile.ci.invariant]
+runs = 256
+depth = 128
 
 # Fork RPCs come only from the environment; nothing secret lives in the repo.
 # Unset variables make fork suites report SKIPPED (see test/fork/ForkTest.sol).

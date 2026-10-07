@@ -63,8 +63,16 @@ jobs:
         run: forge fmt --check
       - name: Build
         run: forge build --sizes
-      - name: Unit tests
+      - name: Unit, fuzz and invariant tests
         run: FOUNDRY_PROFILE=ci forge test --no-match-path 'test/fork/*'
+      - name: Preserve failing fuzz/invariant seeds
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evm-failing-seeds-${{ github.sha }}
+          path: |
+            evm/cache/fuzz
+            evm/cache/invariant
 
   # ─── EVM fork suites: explicit SKIPPED status without RPC secrets ─────────
   evm-fork:
@@ -104,3 +112,19 @@ jobs:
           bun-version: 1.4.2
       - name: Test
         run: bun test
+
+  # ─── Relayer service: restart/reorg/property tests ────────────────────────
+  relayer:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/relayer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Test
+        run: RELAYER_PROPERTY_SEEDS=200 bun test
