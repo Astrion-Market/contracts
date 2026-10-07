@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 
 import {AstrionAccount} from "./AstrionAccount.sol";
+import {RoutePolicy} from "./RoutePolicy.sol";
 import {ProtocolIds} from "../libraries/ProtocolIds.sol";
 
 /// @title AstrionAccountFactory
@@ -9,8 +10,11 @@ import {ProtocolIds} from "../libraries/ProtocolIds.sol";
 /// marketScope, version)` with CREATE2. Deployment is permissionless and
 /// idempotent: the owner is part of both the salt and the constructor
 /// arguments, so anyone deploying "first" can only deploy the owner's own
-/// account. The factory holds no assets and has no admin.
+/// account. The factory holds no assets and has no admin. Every account it
+/// deploys reads route pauses from the same immutable `policy`.
 contract AstrionAccountFactory {
+    RoutePolicy public immutable policy;
+
     event AccountCreated(
         address indexed account,
         address indexed owner,
@@ -22,6 +26,10 @@ contract AstrionAccountFactory {
     error UnsupportedProtocol(bytes32 protocol);
     error ZeroVersion();
 
+    constructor(RoutePolicy policy_) {
+        policy = policy_;
+    }
+
     /// @notice Deploy (or return the existing) account for a scope.
     function createAccount(address owner, bytes32 protocol, bytes32 marketScope, uint32 version)
         external
@@ -32,7 +40,7 @@ contract AstrionAccountFactory {
         account = predictAccount(owner, protocol, marketScope, version);
         if (account.code.length > 0) return account;
         AstrionAccount deployed = new AstrionAccount{salt: salt(owner, protocol, marketScope, version)}(
-            owner, protocol, marketScope, version
+            owner, policy, protocol, marketScope, version
         );
         assert(address(deployed) == account);
         emit AccountCreated(account, owner, protocol, marketScope, version);
@@ -56,7 +64,7 @@ contract AstrionAccountFactory {
         bytes32 initCodeHash = keccak256(
             abi.encodePacked(
                 type(AstrionAccount).creationCode,
-                abi.encode(owner, protocol, marketScope, version)
+                abi.encode(owner, policy, protocol, marketScope, version)
             )
         );
         return address(

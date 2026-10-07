@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {AstrionAccount} from "../../src/account/AstrionAccount.sol";
 import {AstrionAccountFactory} from "../../src/account/AstrionAccountFactory.sol";
+import {RoutePolicy} from "../../src/account/RoutePolicy.sol";
 import {ProtocolIds} from "../../src/libraries/ProtocolIds.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 import {MockLendingPool} from "../mocks/MockLendingPool.sol";
@@ -26,7 +27,7 @@ contract AstrionAccountTest is Test {
     bytes32 constant MARKET = bytes32(uint256(0xbeef));
 
     function setUp() public {
-        factory = new AstrionAccountFactory();
+        factory = new AstrionAccountFactory(new RoutePolicy(address(this)));
         usdc = new MockERC20("USD Coin", "USDC", 6);
         pool = new MockLendingPool();
         usdc.mint(address(pool), 1_000_000e6);
