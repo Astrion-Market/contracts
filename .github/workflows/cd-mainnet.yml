@@ -19,6 +19,12 @@ name: CD — Mainnet
 on:
   workflow_dispatch:
     inputs:
+      generation:
+        description: 'Contract generation to deploy'
+        required: true
+        type: choice
+        options:
+          - legacy-soroban
       confirm:
         description: 'Type DEPLOY to confirm mainnet deployment'
         required: true
@@ -39,9 +45,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check confirmation
-        if: ${{ github.event.inputs.confirm != 'DEPLOY' }}
+        if: ${{ github.event.inputs.confirm != 'DEPLOY' || github.event.inputs.generation != 'legacy-soroban' }}
         run: |
-          echo "::error::Mainnet deployment requires typing 'DEPLOY' in the confirm field."
+          echo "::error::Mainnet deployment requires typing 'DEPLOY' and selecting generation legacy-soroban."
           exit 1
       - run: echo "Confirmation accepted. Proceeding to CI gate."
 
@@ -77,6 +83,9 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     environment: mainnet   # ← enforces required reviewer approval
+    env:
+      ASTRION_GENERATION: ${{ github.event.inputs.generation }}
+      ASTRION_TARGET_NETWORK: mainnet
 
     steps:
       - uses: actions/checkout@v4

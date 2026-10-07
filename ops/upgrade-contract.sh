@@ -21,6 +21,10 @@ set -euo pipefail
 
 contract_alias="${1:?Usage: ops/upgrade-contract.sh <alias> [network] [source]}"
 network="${2:-testnet}"
+
+# Legacy engine is frozen: require explicit generation + network.
+source ops/lib/legacy-guard.sh
+require_legacy_target "$network"
 source_account="${3:-deployer}"
 
 wasm_dir="${WASM_DIR:-target/wasm32v1-none/release}"

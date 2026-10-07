@@ -17,6 +17,10 @@ set -euo pipefail
 
 new_admin="${1:?Usage: ops/rotate-admin.sh <new_admin_address> [network] [source]}"
 network="${2:-testnet}"
+
+# Legacy engine is frozen: require explicit generation + network.
+source ops/lib/legacy-guard.sh
+require_legacy_target "$network"
 source_account="${3:-deployer}"
 
 deploy_dir="${DEPLOY_DIR:-deployments/${network}}"

@@ -20,6 +20,10 @@
 set -euo pipefail
 
 network="${NETWORK:-testnet}"
+
+# Legacy engine is frozen: require explicit generation + network.
+source ops/lib/legacy-guard.sh
+require_legacy_target "$network"
 source_account="${SOURCE:-steins-testnet}"
 wasm_dir="${WASM_DIR:-target/wasm32v1-none/release}"
 deploy_dir="${DEPLOY_DIR:-deployments/${network}}"

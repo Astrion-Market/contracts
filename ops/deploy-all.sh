@@ -14,6 +14,10 @@
 set -euo pipefail
 
 network="${1:-testnet}"
+
+# Legacy engine is frozen: require explicit generation + network.
+source ops/lib/legacy-guard.sh
+require_legacy_target "$network"
 source_account="${2:-deployer}"
 dry_run="${DRYRUN:-0}"
 

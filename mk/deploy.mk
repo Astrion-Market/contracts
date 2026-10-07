@@ -16,7 +16,9 @@ deploy-one:
 		*) echo "Unknown CONTRACT=$(CONTRACT). Use oracle-adapter, interest-rate-model, core-pool, liquidation-engine, market, market-factory, or hello-world."; exit 1 ;; \
 	esac
 
-deploy-contract: build-contract
+deploy-contract:
+	@$(LEGACY_GUARD) $(NETWORK)
+	@$(MAKE) build-contract CONTRACT=$(CONTRACT)
 	@test -n "$(WASM)" || (echo "Usage: make deploy-contract CONTRACT=oracle-adapter WASM=oracle_adapter ALIAS=oracle-adapter" && exit 1)
 	@test -n "$(ALIAS)" || (echo "Usage: make deploy-contract CONTRACT=oracle-adapter WASM=oracle_adapter ALIAS=oracle-adapter" && exit 1)
 	@wasm="$(WASM_DIR)/$(WASM).wasm"; \
@@ -59,10 +61,10 @@ rotate-admin:
 # ─── named network targets ────────────────────────────────────────────────────
 # Testnet: deploys protocol contracts + test tokens, then initializes all.
 deploy-testnet:
-	ops/deploy-all.sh testnet $(SOURCE)
+	ASTRION_TARGET_NETWORK=testnet ops/deploy-all.sh testnet $(SOURCE)
 
 init-testnet:
-	ops/init-all.sh testnet $(SOURCE) \
+	ASTRION_TARGET_NETWORK=testnet ops/init-all.sh testnet $(SOURCE) \
 	  deployments/testnet/config.env \
 	  deployments/testnet/addresses.env
 
@@ -73,17 +75,25 @@ verify-testnet:
 # Use GitHub Actions cd-mainnet workflow for production; this target is for
 # manual emergency use only.
 deploy-mainnet:
+	@ASTRION_TARGET_NETWORK=mainnet $(LEGACY_GUARD) mainnet
 	@echo "┌──────────────────────────────────────────┐"
 	@echo "│  MAINNET DEPLOYMENT — are you sure?      │"
 	@echo "│  Press Enter to continue or Ctrl-C abort │"
 	@echo "└──────────────────────────────────────────┘"
 	@read _
-	ops/deploy-all.sh mainnet $(SOURCE)
+	ASTRION_TARGET_NETWORK=mainnet ops/deploy-all.sh mainnet $(SOURCE)
 
 init-mainnet:
-	ops/init-all.sh mainnet $(SOURCE) \
+	ASTRION_TARGET_NETWORK=mainnet ops/init-all.sh mainnet $(SOURCE) \
 	  deployments/mainnet/config.env \
 	  deployments/mainnet/addresses.env
 
 verify-mainnet:
 	ops/verify-deploy.sh mainnet $(SOURCE)
+
+# ─── legacy inventory (read-only) ─────────────────────────────────────────────
+# Snapshot legacy contracts, market/vault totals and held balances before any
+# retirement decision. Simulation only; never signs or submits.
+.PHONY: legacy-inventory
+legacy-inventory:
+	ops/legacy-inventory.sh $(NETWORK) $(SOURCE)

@@ -1,6 +1,12 @@
 name: CD — Testnet
 
-# Automatically deploys to testnet on every push to main.
+# Manual-only deployment of the FROZEN legacy Soroban lending engine.
+#
+# This workflow used to run on every push to main. The legacy engine is no
+# longer the product (docs/adr/0001-crosschain-lending-direction.md), so it is
+# never deployed implicitly: the operator must pick the generation and type the
+# target network. See docs/legacy/DEPLOYMENT_INVENTORY.md.
+#
 # Requires the following GitHub Secrets (repo Settings → Secrets → Actions):
 #   TESTNET_DEPLOYER_SECRET  — Stellar secret key (S...) for the deployer wallet
 #   TESTNET_ADMIN_ADDRESS    — Admin public key (G...)
@@ -8,18 +14,40 @@ name: CD — Testnet
 #   TESTNET_ORACLE_ID        — SEP-0402 oracle contract address (C...)
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:   # allow manual trigger
+  workflow_dispatch:
+    inputs:
+      generation:
+        description: 'Contract generation to deploy'
+        required: true
+        type: choice
+        options:
+          - legacy-soroban
+      network:
+        description: 'Type testnet to confirm the target network'
+        required: true
+        type: string
 
 concurrency:
   group: cd-testnet
   cancel-in-progress: false   # never cancel a running deploy
 
 jobs:
+  # ─── guard: explicit generation + network ────────────────────────────────
+  confirm-target:
+    name: Confirm target
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check generation and network
+        if: ${{ github.event.inputs.generation != 'legacy-soroban' || github.event.inputs.network != 'testnet' }}
+        run: |
+          echo "::error::Requires generation=legacy-soroban and network=testnet."
+          exit 1
+      - run: echo "Target confirmed."
+
   # ─── gate: all tests must pass before any deploy ──────────────────────────
   test:
     name: CI gate
+    needs: confirm-target
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,6 +73,9 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     environment: testnet
+    env:
+      ASTRION_GENERATION: ${{ github.event.inputs.generation }}
+      ASTRION_TARGET_NETWORK: ${{ github.event.inputs.network }}
 
     steps:
       - uses: actions/checkout@v4
