@@ -197,3 +197,86 @@ fn test_allocate_deallocate_and_real_assets() {
     assert_eq!(adapter.real_assets(), 300);
     assert_eq!(token::Client::new(&env, &asset).balance(&vault), 200);
 }
+
+// ---------------------------------------------------------------------------
+// Legacy review findings (docs/legacy/REVIEW_FINDINGS.md)
+//
+// Each test states the EXPECTED authorization behaviour. They are #[ignore]d
+// because they fail against the current code; run them with
+// `cargo test -p market-adapter -- --ignored` to reproduce. Remove the
+// #[ignore] in the commit that remediates the finding.
+// ---------------------------------------------------------------------------
+
+fn finding_setup(env: &Env) -> (Address, Address, Address, MarketAdapterContractClient<'_>) {
+    let admin = Address::generate(env);
+    let asset = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let vault = Address::generate(env);
+    let factory = Address::generate(env);
+    let adapter_id = env.register(MarketAdapterContract, ());
+    let adapter = MarketAdapterContractClient::new(env, &adapter_id);
+    adapter.initialize(&vault, &asset, &factory);
+    env.mock_auths(&[MockAuth {
+        address: &admin,
+        invoke: &MockAuthInvoke {
+            contract: &asset,
+            fn_name: "mint",
+            args: (&adapter_id, 1_000i128).into_val(env),
+            sub_invokes: &[],
+        },
+    }]);
+    token::StellarAssetClient::new(env, &asset).mint(&adapter_id, &1_000);
+    (asset, vault, adapter_id, adapter)
+}
+
+/// LEGACY-F1: `deallocate` compares the caller-supplied `sender` with
+/// `parent_vault` but never calls `sender.require_auth()`. Anyone can pass the
+/// vault's address and force liquidity out of markets.
+#[test]
+#[ignore = "LEGACY-F1: market-adapter deallocate lacks parent_vault.require_auth()"]
+fn finding_f1_deallocate_requires_vault_auth() {
+    let env = Env::default();
+    let (asset, vault, _adapter_id, adapter) = finding_setup(&env);
+    let market_id = env.register(MockMarket, ());
+    MockMarketClient::new(&env, &market_id).initialize(&default_config(&env, &asset));
+    let data = market_id.clone().to_xdr(&env);
+    adapter.allocate(&data, &500, &soroban_sdk::symbol_short!("supply"), &vault);
+
+    // No authorization from `vault` is provided for this call.
+    let result =
+        adapter.try_deallocate(&data, &200, &soroban_sdk::symbol_short!("withdr"), &vault);
+    assert!(result.is_err(), "deallocate must require the vault's auth");
+}
+
+/// LEGACY-F1 (allocate side): same missing `require_auth()` on `allocate`.
+#[test]
+#[ignore = "LEGACY-F1: market-adapter allocate lacks parent_vault.require_auth()"]
+fn finding_f1_allocate_requires_vault_auth() {
+    let env = Env::default();
+    let (asset, vault, _adapter_id, adapter) = finding_setup(&env);
+    let market_id = env.register(MockMarket, ());
+    MockMarketClient::new(&env, &market_id).initialize(&default_config(&env, &asset));
+    let data = market_id.clone().to_xdr(&env);
+
+    let result = adapter.try_allocate(&data, &500, &soroban_sdk::symbol_short!("supply"), &vault);
+    assert!(result.is_err(), "allocate must require the vault's auth");
+}
+
+/// LEGACY-F2: `market_factory` is stored but never consulted. Any contract
+/// that reports a matching loan asset is accepted as a market, so idle adapter
+/// balance can be supplied into an attacker-controlled "market".
+#[test]
+#[ignore = "LEGACY-F2: market-adapter does not authenticate markets via market_factory"]
+fn finding_f2_allocate_rejects_market_not_from_factory() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (asset, vault, _adapter_id, adapter) = finding_setup(&env);
+    // A market the configured factory never created.
+    let rogue_market = env.register(MockMarket, ());
+    MockMarketClient::new(&env, &rogue_market).initialize(&default_config(&env, &asset));
+    let data = rogue_market.clone().to_xdr(&env);
+
+    let result = adapter.try_allocate(&data, &500, &soroban_sdk::symbol_short!("supply"), &vault);
+    assert!(result.is_err(), "allocate must reject markets not created by market_factory");
+}

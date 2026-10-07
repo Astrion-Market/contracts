@@ -522,3 +522,36 @@ fn test_set_close_factor() {
     eng.set_close_factor(&(WAD * 30 / 100));
     assert_eq!(eng.close_factor(), Some(WAD * 30 / 100));
 }
+
+// ---------------------------------------------------------------------------
+// Legacy review findings (docs/legacy/REVIEW_FINDINGS.md)
+// ---------------------------------------------------------------------------
+
+/// LEGACY-F4: `execute_liquidation` repays debt and emits a seizure amount but
+/// never transfers or seizes collateral. Expected: the borrower's collateral
+/// decreases by the computed seizure. Ignored because it fails today; run with
+/// `cargo test -p liquidation-engine -- --ignored`.
+#[test]
+#[ignore = "LEGACY-F4: liquidation-engine does not seize collateral"]
+fn finding_f4_liquidation_seizes_collateral() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let s = setup(&env);
+
+    let liquidator = Address::generate(&env);
+    let borrower = Address::generate(&env);
+    core(&env, &s).mock_hf(&borrower, &(WAD / 2));
+    core(&env, &s).mock_borrow(&borrower, &s.debt_asset, &1_000_i128);
+    core(&env, &s).mock_supply(&borrower, &s.collateral_asset, &1_000_i128);
+
+    engine(&env, &s).liquidate(
+        &liquidator,
+        &borrower,
+        &s.debt_asset,
+        &s.collateral_asset,
+        &500_i128,
+    );
+
+    let remaining = core(&env, &s).get_supply_balance(&borrower, &s.collateral_asset);
+    assert!(remaining < 1_000, "collateral must be seized from the borrower");
+}

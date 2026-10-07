@@ -609,3 +609,31 @@ fn test_receive_shares_gate_fails_closed() {
     s.client.deposit(&user, &100, &allowed);
     assert!(s.client.balance_of(&allowed) > 0);
 }
+
+/// LEGACY-F3 (docs/legacy/REVIEW_FINDINGS.md): `deallocate_internal` checks
+/// adapter membership but `allocate_internal` does not, so an allocator can move
+/// idle vault assets to any contract that reports a positive change.
+/// Ignored because it fails against current code; run with `--ignored`.
+#[test]
+#[ignore = "LEGACY-F3: vault allocate_internal lacks the is_adapter check"]
+fn finding_f3_allocate_rejects_disabled_adapter() {
+    let s = setup();
+    let allocator = Address::generate(&s.env);
+    let user = Address::generate(&s.env);
+    let adapter = s.env.register(MockAdapter, ());
+    MockAdapterClient::new(&s.env, &adapter).initialize(&s.asset);
+    let data = Bytes::from_array(&s.env, &[9, 9, 9, 9]);
+    let id = s.env.crypto().sha256(&data).to_bytes();
+
+    enable_allocator(&s, &allocator);
+    // Adapter deliberately NOT enabled.
+    set_cap(&s, &id, 1_000, 0);
+    mint_asset(&s.env, &s.asset, &user, 1_000);
+    s.client.deposit(&user, &1_000, &user);
+
+    let result =
+        s.client
+            .try_allocate(&allocator, &adapter, &data, &400, &symbol_short!("supply"));
+    assert_eq!(result, Err(Ok(crate::errors::VaultError::AdapterNotEnabled)));
+    assert_eq!(token::Client::new(&s.env, &s.asset).balance(&adapter), 0);
+}
