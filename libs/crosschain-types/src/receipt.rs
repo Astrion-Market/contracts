@@ -57,7 +57,9 @@ pub struct Receipt {
 const CCTP_DECIMALS: u8 = 6;
 
 fn raw(amount: &Option<Amount>, decimals: u8) -> Result<u128, ValidationError> {
-    let amount = amount.as_ref().ok_or(ValidationError::ReconciliationMismatch)?;
+    let amount = amount
+        .as_ref()
+        .ok_or(ValidationError::ReconciliationMismatch)?;
     if amount.decimals != decimals {
         return Err(ValidationError::ReconciliationMismatch);
     }

@@ -53,7 +53,9 @@ contract AstrionAccountFactory {
         if (version == 0) revert ZeroVersion();
         account = predictAccount(owner, protocol, marketScope, version);
         if (account.code.length > 0) return account;
-        AstrionAccount deployed = new AstrionAccount{salt: salt(owner, protocol, marketScope, version)}(
+        AstrionAccount deployed = new AstrionAccount{
+            salt: salt(owner, protocol, marketScope, version)
+        }(
             owner, policy, messageTransmitter, usdc, localDomain, protocol, marketScope, version
         );
         assert(address(deployed) == account);

@@ -631,9 +631,12 @@ fn finding_f3_allocate_rejects_disabled_adapter() {
     mint_asset(&s.env, &s.asset, &user, 1_000);
     s.client.deposit(&user, &1_000, &user);
 
-    let result =
-        s.client
-            .try_allocate(&allocator, &adapter, &data, &400, &symbol_short!("supply"));
-    assert_eq!(result, Err(Ok(crate::errors::VaultError::AdapterNotEnabled)));
+    let result = s
+        .client
+        .try_allocate(&allocator, &adapter, &data, &400, &symbol_short!("supply"));
+    assert_eq!(
+        result,
+        Err(Ok(crate::errors::VaultError::AdapterNotEnabled))
+    );
     assert_eq!(token::Client::new(&s.env, &s.asset).balance(&adapter), 0);
 }

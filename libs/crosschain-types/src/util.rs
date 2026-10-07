@@ -44,7 +44,9 @@ pub fn is_stellar_address(s: &str) -> bool {
         Some(b'M') => s.len() == 69,
         _ => false,
     };
-    len_ok && s.bytes().all(|b| b.is_ascii_uppercase() || (b'2'..=b'7').contains(&b))
+    len_ok
+        && s.bytes()
+            .all(|b| b.is_ascii_uppercase() || (b'2'..=b'7').contains(&b))
 }
 
 pub fn is_address_of_kind(s: &str, kind: NetworkKind) -> bool {

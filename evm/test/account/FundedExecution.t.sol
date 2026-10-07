@@ -45,7 +45,8 @@ contract FundedExecutionTest is Test {
             IERC20(address(usdc)),
             BASE
         );
-        account = AstrionAccount(payable(factory.createAccount(alice, ProtocolIds.AAVE_V3, MARKET, 1)));
+        account =
+            AstrionAccount(payable(factory.createAccount(alice, ProtocolIds.AAVE_V3, MARKET, 1)));
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────
@@ -60,7 +61,15 @@ contract FundedExecutionTest is Test {
         uint256 fee
     ) internal pure returns (bytes memory) {
         bytes memory header = abi.encodePacked(
-            uint32(1), STELLAR, dst, nonce, bytes32(0), bytes32(0), caller, uint32(1000), uint32(2000)
+            uint32(1),
+            STELLAR,
+            dst,
+            nonce,
+            bytes32(0),
+            bytes32(0),
+            caller,
+            uint32(1000),
+            uint32(2000)
         );
         bytes memory body = abi.encodePacked(
             uint32(1), bytes32(0), mintRecipient, amount, bytes32(0), uint256(fee), fee, uint256(0)
@@ -68,7 +77,11 @@ contract FundedExecutionTest is Test {
         return bytes.concat(header, body);
     }
 
-    function _toAccount(bytes32 nonce, uint256 amount, uint256 fee) internal view returns (bytes memory) {
+    function _toAccount(bytes32 nonce, uint256 amount, uint256 fee)
+        internal
+        view
+        returns (bytes memory)
+    {
         bytes32 self = CctpMessageV2.toBytes32(address(account));
         return _message(BASE, nonce, self, self, amount, fee);
     }
@@ -106,14 +119,19 @@ contract FundedExecutionTest is Test {
         return account.transferIdOf(STELLAR, nonce);
     }
 
-    function _receipt(bytes32 id) internal view returns (bool recorded, bool consumed, uint256 received) {
+    function _receipt(bytes32 id)
+        internal
+        view
+        returns (bool recorded, bool consumed, uint256 received)
+    {
         (recorded, consumed,,,,, received) = account.receipts(id);
     }
 
     // ─── reconciliation ──────────────────────────────────────────────────────
 
     function test_receiptRecordsMeasuredAmountAfterFee() public {
-        bytes32 id = account.receiveTransfer(_toAccount(bytes32(uint256(1)), 100e6, 0.01e6), attestation);
+        bytes32 id =
+            account.receiveTransfer(_toAccount(bytes32(uint256(1)), 100e6, 0.01e6), attestation);
         assertEq(id, _id(bytes32(uint256(1))));
         (bool recorded, bool consumed, uint256 received) = _receipt(id);
         assertTrue(recorded);
@@ -131,7 +149,9 @@ contract FundedExecutionTest is Test {
 
     function test_mintedAmountMustReconcile() public {
         transmitter.setShortfall(1);
-        vm.expectRevert(abi.encodeWithSelector(AstrionAccount.ReceiptMismatch.selector, 10e6, 10e6 - 1));
+        vm.expectRevert(
+            abi.encodeWithSelector(AstrionAccount.ReceiptMismatch.selector, 10e6, 10e6 - 1)
+        );
         account.receiveTransfer(_toAccount(bytes32(uint256(1)), 10e6, 0), attestation);
     }
 
@@ -186,8 +206,9 @@ contract FundedExecutionTest is Test {
         bytes memory sig = _sign(intent, alicePk);
 
         vm.recordLogs();
-        bool executed =
-            account.executeFundedIntent(intent, action, sig, 0, _toAccount(n, 50e6, 0), attestation);
+        bool executed = account.executeFundedIntent(
+            intent, action, sig, 0, _toAccount(n, 50e6, 0), attestation
+        );
         assertFalse(executed);
         assertTrue(_sawFailure());
 
@@ -211,7 +232,9 @@ contract FundedExecutionTest is Test {
         vm.warp(stale.deadline + 1);
 
         assertFalse(
-            account.executeFundedIntent(stale, action, staleSig, 0, _toAccount(n, 20e6, 0), attestation)
+            account.executeFundedIntent(
+                stale, action, staleSig, 0, _toAccount(n, 20e6, 0), attestation
+            )
         );
         assertEq(usdc.balanceOf(address(account)), 20e6);
 
@@ -234,7 +257,9 @@ contract FundedExecutionTest is Test {
                 AstrionAccount.TransferMismatch.selector, _id(signedFor), _id(substituted)
             )
         );
-        account.executeFundedIntent(intent, action, sig, 0, _toAccount(substituted, 10e6, 0), attestation);
+        account.executeFundedIntent(
+            intent, action, sig, 0, _toAccount(substituted, 10e6, 0), attestation
+        );
     }
 
     function test_consumedTransferCannotFundASecondAction() public {
@@ -283,7 +308,7 @@ contract FundedExecutionTest is Test {
         account.executeFundedIntent(intent, action, "", 0, "", "");
     }
 
-    function _sawFailure() internal returns (bool) {
+    function _sawFailure() internal view returns (bool) {
         Vm.Log[] memory logs = vm.getRecordedLogs();
         for (uint256 i = 0; i < logs.length; i++) {
             if (logs[i].topics[0] == AstrionAccount.FundedActionFailed.selector) return true;

@@ -244,8 +244,7 @@ fn finding_f1_deallocate_requires_vault_auth() {
     adapter.allocate(&data, &500, &soroban_sdk::symbol_short!("supply"), &vault);
 
     // No authorization from `vault` is provided for this call.
-    let result =
-        adapter.try_deallocate(&data, &200, &soroban_sdk::symbol_short!("withdr"), &vault);
+    let result = adapter.try_deallocate(&data, &200, &soroban_sdk::symbol_short!("withdr"), &vault);
     assert!(result.is_err(), "deallocate must require the vault's auth");
 }
 
@@ -278,5 +277,8 @@ fn finding_f2_allocate_rejects_market_not_from_factory() {
     let data = rogue_market.clone().to_xdr(&env);
 
     let result = adapter.try_allocate(&data, &500, &soroban_sdk::symbol_short!("supply"), &vault);
-    assert!(result.is_err(), "allocate must reject markets not created by market_factory");
+    assert!(
+        result.is_err(),
+        "allocate must reject markets not created by market_factory"
+    );
 }

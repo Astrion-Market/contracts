@@ -169,6 +169,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "astrion-crosschain-types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha3",
+]
+
+[[package]]
 name = "astrion-market-types"
 version = "0.1.0"
 dependencies = [

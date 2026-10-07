@@ -39,7 +39,9 @@ abstract contract ForkTest is Test {
         pure
         returns (string memory envName, uint256 pinned, string memory blockEnv)
     {
-        if (chainId == BASE_CHAIN_ID) return ("BASE_RPC_URL", BASE_FORK_BLOCK, "FORK_BLOCK_BASE");
+        if (chainId == BASE_CHAIN_ID) {
+            return ("BASE_RPC_URL", BASE_FORK_BLOCK, "FORK_BLOCK_BASE");
+        }
         if (chainId == ETHEREUM_CHAIN_ID) {
             return ("ETH_RPC_URL", ETHEREUM_FORK_BLOCK, "FORK_BLOCK_ETHEREUM");
         }

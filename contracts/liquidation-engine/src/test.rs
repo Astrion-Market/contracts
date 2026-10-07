@@ -553,5 +553,8 @@ fn finding_f4_liquidation_seizes_collateral() {
     );
 
     let remaining = core(&env, &s).get_supply_balance(&borrower, &s.collateral_asset);
-    assert!(remaining < 1_000, "collateral must be seized from the borrower");
+    assert!(
+        remaining < 1_000,
+        "collateral must be seized from the borrower"
+    );
 }

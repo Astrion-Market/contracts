@@ -22,7 +22,8 @@ fn fixtures(sub: &str) -> Vec<(String, Value)> {
             if path.is_dir() {
                 dirs.push(path);
             } else if path.extension().is_some_and(|e| e == "json") {
-                let value: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+                let value: Value =
+                    serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
                 out.push((path.display().to_string(), value));
             }
         }
@@ -51,7 +52,11 @@ fn intent_fixtures_match_expectations() {
 fn receipt_fixtures_match_expectations() {
     for (path, fixture) in fixtures("receipts") {
         let expect = fixture["expect"].as_str().unwrap();
-        assert_eq!(outcome(validate_receipt(&fixture["receipt"])), expect, "{path}");
+        assert_eq!(
+            outcome(validate_receipt(&fixture["receipt"])),
+            expect,
+            "{path}"
+        );
     }
 }
 
@@ -75,7 +80,10 @@ fn registry_matches_spec_networks_json() {
         assert_eq!(entry["kind"], kind);
         assert_eq!(entry["environment"], env);
         assert_eq!(entry["cctpDomain"].as_u64(), Some(u64::from(n.cctp_domain)));
-        assert_eq!(entry["usdcDecimals"].as_u64(), Some(u64::from(n.usdc_decimals)));
+        assert_eq!(
+            entry["usdcDecimals"].as_u64(),
+            Some(u64::from(n.usdc_decimals))
+        );
         assert_eq!(entry["chainId"].as_u64(), n.chain_id);
         assert_eq!(entry["networkPassphrase"].as_str(), n.network_passphrase);
     }

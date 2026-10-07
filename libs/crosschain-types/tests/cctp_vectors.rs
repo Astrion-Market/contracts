@@ -14,7 +14,8 @@ use astrion_crosschain_types::{
 use serde_json::Value;
 
 fn vectors() -> Value {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../spec/fixtures/cctp/vectors.json");
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../spec/fixtures/cctp/vectors.json");
     serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
 }
 
@@ -58,7 +59,9 @@ fn strkeys_decode_and_reencode() {
             _ => StrkeyKind::Muxed,
         };
         assert_eq!(key.kind, kind, "{s}");
-        let id = v.get("id").map(|id| id.as_str().unwrap().parse::<u64>().unwrap());
+        let id = v
+            .get("id")
+            .map(|id| id.as_str().unwrap().parse::<u64>().unwrap());
         assert_eq!(key.muxed_id, id, "{s}");
         assert_eq!(strkey::encode(kind, &key.key, id), s);
     }
@@ -104,7 +107,11 @@ fn amount_conversions() {
         let input = u(&case["cctp"]);
         match case.get("error") {
             Some(e) => assert_eq!(err(cctp_to_stellar(input)), e.as_str().unwrap(), "{input}"),
-            None => assert_eq!(cctp_to_stellar(input).unwrap(), u(&case["stellar"]), "{input}"),
+            None => assert_eq!(
+                cctp_to_stellar(input).unwrap(),
+                u(&case["stellar"]),
+                "{input}"
+            ),
         }
     }
 }
@@ -120,7 +127,10 @@ fn evm_bytes32() {
     }
     for case in v["evm"]["invalidBytes32"].as_array().unwrap() {
         let b = arr32(case["bytes32"].as_str().unwrap());
-        assert_eq!(err(bytes32_to_evm_address(&b)), case["error"].as_str().unwrap());
+        assert_eq!(
+            err(bytes32_to_evm_address(&b)),
+            case["error"].as_str().unwrap()
+        );
     }
 }
 
@@ -155,38 +165,69 @@ fn messages_decode() {
         let m = decode_message(&unhex(case["hex"].as_str().unwrap())).unwrap();
         let d = &case["decoded"];
         assert_eq!(u64::from(m.version), d["version"].as_u64().unwrap());
-        assert_eq!(u64::from(m.source_domain), d["sourceDomain"].as_u64().unwrap());
-        assert_eq!(u64::from(m.destination_domain), d["destinationDomain"].as_u64().unwrap());
+        assert_eq!(
+            u64::from(m.source_domain),
+            d["sourceDomain"].as_u64().unwrap()
+        );
+        assert_eq!(
+            u64::from(m.destination_domain),
+            d["destinationDomain"].as_u64().unwrap()
+        );
         assert_eq!(m.nonce, arr32(d["nonce"].as_str().unwrap()));
-        assert_eq!(m.destination_caller, arr32(d["destinationCaller"].as_str().unwrap()));
-        assert_eq!(u64::from(m.min_finality_threshold), d["minFinalityThreshold"].as_u64().unwrap());
+        assert_eq!(
+            m.destination_caller,
+            arr32(d["destinationCaller"].as_str().unwrap())
+        );
+        assert_eq!(
+            u64::from(m.min_finality_threshold),
+            d["minFinalityThreshold"].as_u64().unwrap()
+        );
         assert_eq!(
             u64::from(m.finality_threshold_executed),
             d["finalityThresholdExecuted"].as_u64().unwrap()
         );
         let b = &d["burn"];
         assert_eq!(m.burn.burn_token, arr32(b["burnToken"].as_str().unwrap()));
-        assert_eq!(m.burn.mint_recipient, arr32(b["mintRecipient"].as_str().unwrap()));
+        assert_eq!(
+            m.burn.mint_recipient,
+            arr32(b["mintRecipient"].as_str().unwrap())
+        );
         assert_eq!(m.burn.amount, u(&b["amount"]));
-        assert_eq!(m.burn.message_sender, arr32(b["messageSender"].as_str().unwrap()));
+        assert_eq!(
+            m.burn.message_sender,
+            arr32(b["messageSender"].as_str().unwrap())
+        );
         assert_eq!(m.burn.max_fee, u(&b["maxFee"]));
         assert_eq!(m.burn.fee_executed, u(&b["feeExecuted"]));
         assert_eq!(m.burn.expiration_block, u(&b["expirationBlock"]));
         assert_eq!(m.burn.hook_data, unhex(b["hookData"].as_str().unwrap()));
         if let Some(inbound) = case.get("inboundToStellar") {
             let r = inbound_to_stellar(&m, forwarder).unwrap();
-            assert_eq!(r.forward_recipient, inbound["forwardRecipient"].as_str().unwrap());
+            assert_eq!(
+                r.forward_recipient,
+                inbound["forwardRecipient"].as_str().unwrap()
+            );
             assert_eq!(r.minted_stellar_amount, u(&inbound["mintedStellarAmount"]));
         }
     }
     for case in v["messages"]["invalid"].as_array().unwrap() {
         let bytes = unhex(case["hex"].as_str().unwrap());
-        assert_eq!(err(decode_message(&bytes)), case["error"].as_str().unwrap(), "{}", case["why"]);
+        assert_eq!(
+            err(decode_message(&bytes)),
+            case["error"].as_str().unwrap(),
+            "{}",
+            case["why"]
+        );
     }
     for case in v["messages"]["invalidInbound"].as_array().unwrap() {
         let bytes = unhex(case["hex"].as_str().unwrap());
         let result = decode_message(&bytes).and_then(|m| inbound_to_stellar(&m, forwarder));
-        assert_eq!(err(result), case["error"].as_str().unwrap(), "{}", case["why"]);
+        assert_eq!(
+            err(result),
+            case["error"].as_str().unwrap(),
+            "{}",
+            case["why"]
+        );
     }
 }
 
@@ -202,10 +243,19 @@ fn builders_fail_before_burn_on_bad_destinations() {
     assert_eq!(burn.retained_dust, 5);
     assert_eq!(burn.mint_recipient, evm_address_to_bytes32(&account));
     assert_eq!(burn.destination_caller, [0u8; 32]);
-    assert_eq!(err(stellar_burn(10_000_000, 27, &account, None, 0, 1000)), "BadForwarderFields");
-    assert_eq!(err(stellar_burn(10_000_000, 6, &[0u8; 20], None, 0, 1000)), "NotAnEvmAddress");
+    assert_eq!(
+        err(stellar_burn(10_000_000, 27, &account, None, 0, 1000)),
+        "BadForwarderFields"
+    );
+    assert_eq!(
+        err(stellar_burn(10_000_000, 6, &[0u8; 20], None, 0, 1000)),
+        "NotAnEvmAddress"
+    );
     assert_eq!(err(stellar_burn(9, 6, &account, None, 0, 1000)), "DustOnly");
-    assert_eq!(err(stellar_burn(100, 6, &account, None, 100, 1000)), "FeeExceedsAmount");
+    assert_eq!(
+        err(stellar_burn(100, 6, &account, None, 100, 1000)),
+        "FeeExceedsAmount"
+    );
 
     let out = evm_burn_to_stellar(1_000_000, forwarder, g, 500, 2000).unwrap();
     let fwd = contract_to_bytes32(forwarder).unwrap();
@@ -214,8 +264,17 @@ fn builders_fail_before_burn_on_bad_destinations() {
     assert_eq!(out.destination_caller, fwd);
     assert_eq!(parse_forwarder_hook(&out.hook_data).unwrap().0, g);
     // Forwarder must be a contract; recipient must be a valid strkey.
-    assert_eq!(err(evm_burn_to_stellar(1_000_000, g, g, 0, 2000)), "NotAContract");
+    assert_eq!(
+        err(evm_burn_to_stellar(1_000_000, g, g, 0, 2000)),
+        "NotAContract"
+    );
     let bad = format!("{}A", &g[..55]);
-    assert_eq!(err(evm_burn_to_stellar(1_000_000, forwarder, &bad, 0, 2000)), "InvalidStrkey");
-    assert_eq!(err(evm_burn_to_stellar(500, forwarder, g, 500, 2000)), "FeeExceedsAmount");
+    assert_eq!(
+        err(evm_burn_to_stellar(1_000_000, forwarder, &bad, 0, 2000)),
+        "InvalidStrkey"
+    );
+    assert_eq!(
+        err(evm_burn_to_stellar(500, forwarder, g, 500, 2000)),
+        "FeeExceedsAmount"
+    );
 }

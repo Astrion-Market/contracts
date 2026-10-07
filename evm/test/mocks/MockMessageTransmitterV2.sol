@@ -34,7 +34,10 @@ contract MockMessageTransmitterV2 is IMessageTransmitterV2 {
     {
         if (keccak256(attestation) != VALID_ATTESTATION) revert BadAttestation();
         CctpMessageV2.Burn memory b = CctpMessageV2.decode(message);
-        if (b.destinationCaller != bytes32(0) && b.destinationCaller != bytes32(uint256(uint160(msg.sender)))) {
+        if (
+            b.destinationCaller != bytes32(0)
+                && b.destinationCaller != bytes32(uint256(uint160(msg.sender)))
+        ) {
             revert WrongCaller();
         }
         if (usedNonces[b.nonce] != 0) revert NonceUsed();

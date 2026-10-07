@@ -50,8 +50,9 @@ contract ExecutionIntentTest is Test {
         pool = new MockLendingPool();
         usdc.mint(address(pool), 1_000_000e6);
         module = new MockPoolModule(address(pool), address(usdc));
-        account = AstrionAccount(payable(factory.createAccount(alice, ProtocolIds.AAVE_V3, MARKET, 1)));
-        usdc.mint(address(account), 1_000e6);
+        account =
+            AstrionAccount(payable(factory.createAccount(alice, ProtocolIds.AAVE_V3, MARKET, 1)));
+        usdc.mint(address(account), 1000e6);
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────
@@ -247,11 +248,14 @@ contract ExecutionIntentTest is Test {
 
     function test_substitutedTargetIsRejected() public {
         MockLendingPool other = new MockLendingPool();
-        address mod = address(new SubstituteTargetModule(address(pool), address(usdc), address(other)));
+        address mod =
+            address(new SubstituteTargetModule(address(pool), address(usdc), address(other)));
         bytes memory action = _action(SUPPLY, 1e6);
         AstrionAccount.ExecutionIntent memory intent = _intent(mod, action, 1);
         bytes memory sig = _sign(account, intent, alicePk);
-        vm.expectRevert(abi.encodeWithSelector(AstrionAccount.TargetNotAllowed.selector, address(other)));
+        vm.expectRevert(
+            abi.encodeWithSelector(AstrionAccount.TargetNotAllowed.selector, address(other))
+        );
         account.executeIntent(intent, action, sig, 0);
     }
 
@@ -260,7 +264,9 @@ contract ExecutionIntentTest is Test {
         bytes memory action = _action(SUPPLY, 1e6);
         AstrionAccount.ExecutionIntent memory intent = _intent(mod, action, 1);
         bytes memory sig = _sign(account, intent, alicePk);
-        vm.expectRevert(abi.encodeWithSelector(AstrionAccount.ExcessAllowance.selector, address(usdc)));
+        vm.expectRevert(
+            abi.encodeWithSelector(AstrionAccount.ExcessAllowance.selector, address(usdc))
+        );
         account.executeIntent(intent, action, sig, 0);
     }
 
@@ -280,7 +286,9 @@ contract ExecutionIntentTest is Test {
         bytes memory action = _action(SUPPLY, 1e6);
         AstrionAccount.ExecutionIntent memory intent = _intent(mod, action, 1);
         bytes memory sig = _sign(account, intent, alicePk);
-        vm.expectRevert(abi.encodeWithSelector(AstrionAccount.TargetNotAllowed.selector, address(account)));
+        vm.expectRevert(
+            abi.encodeWithSelector(AstrionAccount.TargetNotAllowed.selector, address(account))
+        );
         account.executeIntent(intent, action, sig, 0);
         assertFalse(account.nonceUsed(999));
         assertEq(account.owner(), alice);
@@ -305,8 +313,9 @@ contract ExecutionIntentTest is Test {
         bytes memory borrow = _action(BORROW, 100e6);
         _run(_intent(address(module), borrow, 2), borrow, 0);
 
+        bytes32 id = _routeId();
         vm.prank(guardian);
-        policy.setPaused(_routeId(), true);
+        policy.setPaused(id, true);
 
         bytes memory moreBorrow = _action(BORROW, 1e6);
         AstrionAccount.ExecutionIntent memory risky = _intent(address(module), moreBorrow, 3);
@@ -321,7 +330,9 @@ contract ExecutionIntentTest is Test {
 
         // And the owner can always exit directly.
         vm.prank(alice);
-        account.execute(address(pool), 0, abi.encodeCall(pool.withdraw, (address(usdc), 500e6, alice)));
+        account.execute(
+            address(pool), 0, abi.encodeCall(pool.withdraw, (address(usdc), 500e6, alice))
+        );
         assertEq(pool.supplied(address(usdc), address(account)), 0);
     }
 

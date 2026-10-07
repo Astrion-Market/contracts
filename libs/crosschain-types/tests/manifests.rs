@@ -39,7 +39,11 @@ fn check_common(m: &Value, env: Environment, evm_networks: [&str; 2]) {
     }
     assert_eq!(routes.len(), 6, "exactly six combinations");
     for r in routes {
-        assert_eq!(r["enabled"], false, "{} must be disabled by default", r["id"]);
+        assert_eq!(
+            r["enabled"], false,
+            "{} must be disabled by default",
+            r["id"]
+        );
         let status = r["status"].as_str().unwrap();
         assert!(
             ["pending-verification", "unavailable", "verified"].contains(&status),
@@ -59,7 +63,10 @@ fn check_common(m: &Value, env: Environment, evm_networks: [&str; 2]) {
     for (id, entry) in m["networks"].as_object().unwrap() {
         let net = network(id).expect("network in registry");
         assert_eq!(net.environment, env, "{id} in wrong manifest");
-        assert_eq!(entry["cctpDomain"].as_u64(), Some(u64::from(net.cctp_domain)));
+        assert_eq!(
+            entry["cctpDomain"].as_u64(),
+            Some(u64::from(net.cctp_domain))
+        );
         assert_eq!(entry["chainId"].as_u64(), net.chain_id);
         assert_eq!(
             entry["usdc"]["decimals"].as_u64(),
@@ -74,10 +81,15 @@ fn check_common(m: &Value, env: Environment, evm_networks: [&str; 2]) {
         match v {
             Value::Object(o) => {
                 if let Some(ver) = o.get("verification").filter(|x| !x.is_null()) {
-                    assert!(ver["sourceUrl"].as_str().is_some_and(|s| s.starts_with("https://")));
+                    assert!(ver["sourceUrl"]
+                        .as_str()
+                        .is_some_and(|s| s.starts_with("https://")));
                     assert!(ver["checkedAt"].as_str().is_some());
                     if ver["status"] == "bytecode-verified" {
-                        assert!(ver["codeHash"].as_str().is_some(), "verified without code hash");
+                        assert!(
+                            ver["codeHash"].as_str().is_some(),
+                            "verified without code hash"
+                        );
                     }
                 }
                 stack.extend(o.into_iter().map(|(_, x)| x));
@@ -90,7 +102,11 @@ fn check_common(m: &Value, env: Environment, evm_networks: [&str; 2]) {
 
 #[test]
 fn mainnet_manifest_covers_six_disabled_routes() {
-    check_common(&manifest("mainnet"), Environment::Mainnet, ["base", "ethereum"]);
+    check_common(
+        &manifest("mainnet"),
+        Environment::Mainnet,
+        ["base", "ethereum"],
+    );
 }
 
 #[test]
@@ -142,9 +158,26 @@ fn testnet_manifest_cannot_resolve_mainnet_write_targets() {
             !addresses.contains(&s.to_lowercase()),
             "testnet manifest contains mainnet-only address {s}"
         );
-        assert!(
-            !["ethereum", "base", "stellar"].contains(&s.as_str()),
-            "testnet manifest references mainnet network {s}"
+    }
+
+    let mut ids: Vec<&str> = test["networks"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    ids.extend(
+        test["routes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["network"].as_str().unwrap()),
+    );
+    for id in ids {
+        assert_eq!(
+            network(id).unwrap().environment,
+            Environment::Testnet,
+            "testnet manifest references mainnet network {id}"
         );
     }
 }

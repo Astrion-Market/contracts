@@ -54,13 +54,15 @@ contract MockPoolModule is IActionModule {
         } else if (kind == REPAY) {
             p.calls = new PlannedCall[](2);
             p.calls[0] = PlannedCall(asset, abi.encodeCall(IERC20.approve, (pool, amount)));
-            p.calls[1] =
-                PlannedCall(pool, abi.encodeCall(MockLendingPool.repay, (asset, amount, 2, account)));
+            p.calls[1] = PlannedCall(
+                pool, abi.encodeCall(MockLendingPool.repay, (asset, amount, 2, account))
+            );
             p.approvalTokens = _one(asset);
         } else if (kind == WITHDRAW) {
             p.calls = new PlannedCall[](2);
-            p.calls[0] =
-                PlannedCall(pool, abi.encodeCall(MockLendingPool.withdraw, (asset, amount, account)));
+            p.calls[0] = PlannedCall(
+                pool, abi.encodeCall(MockLendingPool.withdraw, (asset, amount, account))
+            );
             p.calls[1] = PlannedCall(asset, abi.encodeCall(IERC20.transfer, (recipient, amount)));
             p.approvalTokens = _one(asset);
         } else {

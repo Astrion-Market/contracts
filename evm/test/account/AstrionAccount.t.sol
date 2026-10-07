@@ -31,7 +31,10 @@ contract AstrionAccountTest is Test {
     function setUp() public {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         factory = new AstrionAccountFactory(
-            new RoutePolicy(address(this)), IMessageTransmitterV2(address(0)), IERC20(address(usdc)), 6
+            new RoutePolicy(address(this)),
+            IMessageTransmitterV2(address(0)),
+            IERC20(address(usdc)),
+            6
         );
         pool = new MockLendingPool();
         usdc.mint(address(pool), 1_000_000e6);
@@ -41,7 +44,11 @@ contract AstrionAccountTest is Test {
         return AstrionAccount(payable(factory.createAccount(owner, ProtocolIds.AAVE_V3, MARKET, 1)));
     }
 
-    function _call(address target, bytes memory data) internal pure returns (AstrionAccount.Call memory) {
+    function _call(address target, bytes memory data)
+        internal
+        pure
+        returns (AstrionAccount.Call memory)
+    {
         return AstrionAccount.Call({target: target, value: 0, data: data});
     }
 
@@ -65,7 +72,9 @@ contract AstrionAccountTest is Test {
         address base = factory.predictAccount(alice, ProtocolIds.AAVE_V3, MARKET, 1);
         assertTrue(base != factory.predictAccount(bob, ProtocolIds.AAVE_V3, MARKET, 1));
         assertTrue(base != factory.predictAccount(alice, ProtocolIds.MORPHO_BLUE, MARKET, 1));
-        assertTrue(base != factory.predictAccount(alice, ProtocolIds.AAVE_V3, bytes32(uint256(1)), 1));
+        assertTrue(
+            base != factory.predictAccount(alice, ProtocolIds.AAVE_V3, bytes32(uint256(1)), 1)
+        );
         assertTrue(base != factory.predictAccount(alice, ProtocolIds.AAVE_V3, MARKET, 2));
     }
 
@@ -77,7 +86,9 @@ contract AstrionAccountTest is Test {
 
     function test_rejectsUnsupportedProtocolZeroVersionAndZeroOwner() public {
         vm.expectRevert(
-            abi.encodeWithSelector(AstrionAccountFactory.UnsupportedProtocol.selector, keccak256("x"))
+            abi.encodeWithSelector(
+                AstrionAccountFactory.UnsupportedProtocol.selector, keccak256("x")
+            )
         );
         factory.createAccount(alice, keccak256("x"), MARKET, 1);
         vm.expectRevert(AstrionAccountFactory.ZeroVersion.selector);
@@ -135,23 +146,31 @@ contract AstrionAccountTest is Test {
 
     function test_ownerSuppliesBorrowsRepaysAndWithdrawsDirectly() public {
         AstrionAccount a = _account(alice);
-        usdc.mint(address(a), 1_000e6);
+        usdc.mint(address(a), 1000e6);
 
         AstrionAccount.Call[] memory supply = new AstrionAccount.Call[](2);
         supply[0] = _call(address(usdc), abi.encodeCall(usdc.approve, (address(pool), 600e6)));
-        supply[1] = _call(address(pool), abi.encodeCall(pool.supply, (address(usdc), 600e6, address(a), 0)));
+        supply[1] = _call(
+            address(pool), abi.encodeCall(pool.supply, (address(usdc), 600e6, address(a), 0))
+        );
         vm.prank(alice);
         a.executeBatch(supply);
 
         vm.startPrank(alice);
-        a.execute(address(pool), 0, abi.encodeCall(pool.borrow, (address(usdc), 100e6, 2, 0, address(a))));
+        a.execute(
+            address(pool), 0, abi.encodeCall(pool.borrow, (address(usdc), 100e6, 2, 0, address(a)))
+        );
         a.execute(address(usdc), 0, abi.encodeCall(usdc.approve, (address(pool), 100e6)));
-        a.execute(address(pool), 0, abi.encodeCall(pool.repay, (address(usdc), 100e6, 2, address(a))));
-        a.execute(address(pool), 0, abi.encodeCall(pool.withdraw, (address(usdc), 600e6, address(a))));
-        a.execute(address(usdc), 0, abi.encodeCall(usdc.transfer, (alice, 1_000e6)));
+        a.execute(
+            address(pool), 0, abi.encodeCall(pool.repay, (address(usdc), 100e6, 2, address(a)))
+        );
+        a.execute(
+            address(pool), 0, abi.encodeCall(pool.withdraw, (address(usdc), 600e6, address(a)))
+        );
+        a.execute(address(usdc), 0, abi.encodeCall(usdc.transfer, (alice, 1000e6)));
         vm.stopPrank();
 
-        assertEq(usdc.balanceOf(alice), 1_000e6);
+        assertEq(usdc.balanceOf(alice), 1000e6);
         assertEq(pool.supplied(address(usdc), address(a)), 0);
         assertEq(pool.debt(address(usdc), address(a)), 0);
     }
@@ -161,7 +180,9 @@ contract AstrionAccountTest is Test {
         usdc.mint(address(a), 10e6);
         vm.startPrank(alice);
         a.execute(address(usdc), 0, abi.encodeCall(usdc.approve, (address(pool), 10e6)));
-        a.execute(address(pool), 0, abi.encodeCall(pool.supply, (address(usdc), 10e6, address(a), 0)));
+        a.execute(
+            address(pool), 0, abi.encodeCall(pool.supply, (address(usdc), 10e6, address(a), 0))
+        );
         vm.stopPrank();
 
         assertEq(pool.supplied(address(usdc), address(a)), 10e6);
@@ -178,7 +199,8 @@ contract AstrionAccountTest is Test {
 
         AstrionAccount.Call[] memory calls = new AstrionAccount.Call[](2);
         calls[0] = _call(address(usdc), abi.encodeCall(usdc.approve, (address(pool), 10e6)));
-        calls[1] = _call(address(pool), abi.encodeCall(pool.supply, (address(usdc), 10e6, address(a), 0)));
+        calls[1] =
+            _call(address(pool), abi.encodeCall(pool.supply, (address(usdc), 10e6, address(a), 0)));
         vm.prank(alice);
         vm.expectRevert(MockLendingPool.Paused.selector);
         a.executeBatch(calls);

@@ -9,8 +9,7 @@ use sha3::{Digest, Keccak256};
 use crate::{
     network::{network, Network, NetworkKind},
     util::{
-        hex32, is_address_of_kind, is_bytes32, is_evm_address, is_uint256_decimal,
-        parse_raw_amount,
+        hex32, is_address_of_kind, is_bytes32, is_evm_address, is_uint256_decimal, parse_raw_amount,
     },
     ValidationError, SCHEMA_VERSION,
 };
@@ -94,10 +93,7 @@ pub struct Intent {
 /// Canonical JSON: keys sorted by code point (serde_json's map is a BTreeMap
 /// without `preserve_order`), no insignificant whitespace, ASCII only.
 pub fn intent_id(value: &Value) -> Result<String, ValidationError> {
-    let mut object = value
-        .as_object()
-        .ok_or(ValidationError::Malformed)?
-        .clone();
+    let mut object = value.as_object().ok_or(ValidationError::Malformed)?.clone();
     object.remove("intentId");
     let canonical =
         serde_json::to_string(&Value::Object(object)).map_err(|_| ValidationError::Malformed)?;
@@ -217,7 +213,10 @@ pub fn validate_batch(values: &[Value]) -> Result<Vec<Intent>, ValidationError> 
     let mut intents = Vec::with_capacity(values.len());
     for value in values {
         let intent = validate_intent(value)?;
-        let owner_nonce = (intent.position_owner.to_ascii_lowercase(), intent.nonce.clone());
+        let owner_nonce = (
+            intent.position_owner.to_ascii_lowercase(),
+            intent.nonce.clone(),
+        );
         if !ids.insert(intent.intent_id.clone()) || !nonces.insert(owner_nonce) {
             return Err(ValidationError::DuplicateIntent);
         }
