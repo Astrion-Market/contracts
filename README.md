@@ -44,7 +44,7 @@ leverage, Stellar-only signing (a separate, separately reviewed extension).
 ```
 contracts/      Soroban contracts of the legacy lending engine (frozen, see below)
 libs/           Rust libraries (math, market types, crosschain-types)
-deployments/    Per-network deployment state (crosschain/ manifests planned)
+deployments/    Per-network deployment state and cross-chain manifests
 ops/            Deployment and operations scripts
 mk/             Makefile fragments (all build/test/deploy targets)
 sim/            Legacy testnet simulation harness

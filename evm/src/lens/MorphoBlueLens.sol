@@ -61,8 +61,10 @@ contract MorphoBlueLens {
         p.borrowShares = borrowShares;
         p.collateral = collateral;
         MorphoMarket memory m = MorphoBalances.expectedMarket(morpho, params);
-        p.supplyAssets = MorphoBalances.toAssetsDown(supplyShares, m.totalSupplyAssets, m.totalSupplyShares);
-        p.borrowAssets = MorphoBalances.toAssetsUp(borrowShares, m.totalBorrowAssets, m.totalBorrowShares);
+        p.supplyAssets =
+            MorphoBalances.toAssetsDown(supplyShares, m.totalSupplyAssets, m.totalSupplyShares);
+        p.borrowAssets =
+            MorphoBalances.toAssetsUp(borrowShares, m.totalBorrowAssets, m.totalBorrowShares);
         p.lltv = params.lltv;
         try IMorphoOracle(params.oracle).price() returns (uint256 price) {
             p.oracleOk = true;
@@ -81,8 +83,9 @@ contract MorphoBlueLens {
         s.totalSupplyAssets = m.totalSupplyAssets;
         s.totalBorrowAssets = m.totalBorrowAssets;
         s.liquidity = m.totalSupplyAssets - m.totalBorrowAssets;
-        s.utilizationWad =
-            m.totalSupplyAssets == 0 ? 0 : Math.mulDiv(m.totalBorrowAssets, WAD, m.totalSupplyAssets);
+        s.utilizationWad = m.totalSupplyAssets == 0
+            ? 0
+            : Math.mulDiv(m.totalBorrowAssets, WAD, m.totalSupplyAssets);
         s.fee = m.fee;
     }
 }

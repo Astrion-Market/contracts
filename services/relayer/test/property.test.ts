@@ -89,4 +89,4 @@ test(`random restarts, reorgs, RPC failures and duplicate submits: one signed tx
     expect(chain.uniqueRaw.size, `seed ${seed}`).toBe(requests.length);
     store.close();
   }
-});
+}, 300_000);

@@ -11,13 +11,16 @@ import {ProtocolIds} from "../../src/libraries/ProtocolIds.sol";
 
 /// @notice The SDK (viem) and Solidity agree on the EIP-712 intent digest.
 contract IntentDigestVectorTest is Test {
-    bytes32 constant DOMAIN_TYPEHASH =
-        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 constant DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
 
     string json;
 
     function setUp() public {
-        json = vm.readFile(string.concat(vm.projectRoot(), "/../spec/fixtures/evm/intent-digest.json"));
+        json = vm.readFile(
+            string.concat(vm.projectRoot(), "/../spec/fixtures/evm/intent-digest.json")
+        );
     }
 
     function _intent() internal view returns (AstrionAccount.ExecutionIntent memory i) {
@@ -40,7 +43,9 @@ contract IntentDigestVectorTest is Test {
         returns (bytes32)
     {
         bytes32 domain = keccak256(
-            abi.encode(DOMAIN_TYPEHASH, keccak256("AstrionAccount"), keccak256("1"), chainId, account)
+            abi.encode(
+                DOMAIN_TYPEHASH, keccak256("AstrionAccount"), keccak256("1"), chainId, account
+            )
         );
         bytes32 typehash = keccak256(
             "ExecutionIntent(address module,bytes32 moduleCodeHash,address target,bytes32 actionHash,"
@@ -66,10 +71,13 @@ contract IntentDigestVectorTest is Test {
         );
         AstrionAccount.ExecutionIntent memory i = _intent();
         assertEq(account.intentDigest(i), _digest(block.chainid, address(account), i));
-        assertEq(account.EXECUTION_INTENT_TYPEHASH(), keccak256(
-            "ExecutionIntent(address module,bytes32 moduleCodeHash,address target,bytes32 actionHash,"
-            "address recipient,address relayer,address feeToken,uint256 maxFee,uint256 nonce,"
-            "uint256 deadline,bytes32 transferId)"
-        ));
+        assertEq(
+            account.EXECUTION_INTENT_TYPEHASH(),
+            keccak256(
+                "ExecutionIntent(address module,bytes32 moduleCodeHash,address target,bytes32 actionHash,"
+                "address recipient,address relayer,address feeToken,uint256 maxFee,uint256 nonce,"
+                "uint256 deadline,bytes32 transferId)"
+            )
+        );
     }
 }

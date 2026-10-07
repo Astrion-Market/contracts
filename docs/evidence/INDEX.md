@@ -11,19 +11,24 @@ See [`CHANGELOG.md`](../../CHANGELOG.md) for C01–C20 with commit hashes.
 
 ## Test results
 
-Local validation of the release candidate (results recorded by the
-validation commit that follows C20):
+Local validation of the release candidate on 2026-10-07 (Foundry 1.7.1,
+solc 0.8.30, Rust 1.97.1, Bun 1.4.2):
 
 | Suite | Command | Level | Result |
 |---|---|---|---|
-| Rust workspace (legacy + crosschain-types) | `make test` | unit | _see validation commit_ |
-| Spec / codec vectors (Rust) | `cargo test -p astrion-crosschain-types` | unit | _see validation commit_ |
-| SDK | `make sdk-test` | unit | _see validation commit_ |
-| Relayer (restart, reorg, property) | `make relayer-test` | unit | _see validation commit_ |
-| Solidity unit, fuzz and invariants | `make evm-test` | unit | _see validation commit_ |
-| Fork suites (Aave, Morpho, Compound, lifecycle, transport) | `make evm-fork-test` | fork | needs `BASE_RPC_URL`; reports SKIPPED without it |
-| Route gates | `make route-gates` | fork | needs RPC |
+| Rust workspace (legacy + crosschain-types) | `make test` | unit | 20 suites pass; 5 legacy finding reproductions `#[ignore]`d and confirmed failing |
+| Spec / codec / manifest vectors (Rust) | `cargo test -p astrion-crosschain-types` | unit | 16 / 16 |
+| SDK | `make sdk-test` | unit | 20 / 20 (codecs 11, SDK 9) |
+| EIP-712 digest, viem vs Solidity | `IntentDigestVector.t.sol` | unit | match (`0xaef62e…6670`) |
+| Relayer (restart, reorg, budgets, API, 200-seed property) | `make relayer-test` | unit | 12 / 12 |
+| Solidity unit, fuzz and 7 invariants | `make evm-test` | unit | 67 / 67 |
+| Fork suites (Aave, Morpho, Compound, lifecycle, transport) | `make evm-fork-test` | fork | **9 suites SKIPPED**: no `BASE_RPC_URL` in the validation environment |
+| Route gates | `make route-gates` | fork | not yet generated (needs RPC) |
 | CCTP both directions | `docs/evidence/CCTP_TESTNET.md` | testnet | **not yet run** |
+
+Known red CI steps that predate this work: clippy on legacy contracts under
+the current toolchain, and a raw `cargo build --workspace --target
+wasm32v1-none` step (soroban-sdk requires `stellar contract build`).
 
 ## Integration dependencies (outside this repo)
 

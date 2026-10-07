@@ -32,7 +32,8 @@ contract CctpReturnTest is Test {
     string constant G = "GAUHMCMUP5FZO5675W3ISZ6E6CNYJGXBUW5WANE2JR4TGAARYCTSCBKI";
 
     function setUp() public {
-        vectors = vm.readFile(string.concat(vm.projectRoot(), "/../spec/fixtures/cctp/vectors.json"));
+        vectors =
+            vm.readFile(string.concat(vm.projectRoot(), "/../spec/fixtures/cctp/vectors.json"));
         strkeys = new StrkeyHarness();
         owner = vm.addr(ownerPk);
         usdc = new MockERC20("USD Coin", "USDC", 6);
@@ -40,10 +41,15 @@ contract CctpReturnTest is Test {
         forwarder = bytes32(vm.parseJsonBytes(vectors, ".strkeys[1].hex"));
         module = new CctpReturnModule(ProtocolIds.AAVE_V3, messenger, address(usdc), forwarder);
         factory = new AstrionAccountFactory(
-            new RoutePolicy(address(this)), IMessageTransmitterV2(address(0)), IERC20(address(usdc)), 6
+            new RoutePolicy(address(this)),
+            IMessageTransmitterV2(address(0)),
+            IERC20(address(usdc)),
+            6
         );
-        account = AstrionAccount(payable(factory.createAccount(owner, ProtocolIds.AAVE_V3, bytes32(0), 1)));
-        usdc.mint(address(account), 1_000e6);
+        account = AstrionAccount(
+            payable(factory.createAccount(owner, ProtocolIds.AAVE_V3, bytes32(0), 1))
+        );
+        usdc.mint(address(account), 1000e6);
     }
 
     function _intent(address mod, address target, bytes memory action)
@@ -81,8 +87,10 @@ contract CctpReturnTest is Test {
 
     function test_strkeyVectorsAgreeWithRustAndTs() public view {
         for (uint256 i = 0; i < 6; i++) {
-            string memory s = vm.parseJsonString(vectors, string.concat(".strkeys[", vm.toString(i), "].strkey"));
-            string memory kind = vm.parseJsonString(vectors, string.concat(".strkeys[", vm.toString(i), "].kind"));
+            string memory s =
+                vm.parseJsonString(vectors, string.concat(".strkeys[", vm.toString(i), "].strkey"));
+            string memory kind =
+                vm.parseJsonString(vectors, string.concat(".strkeys[", vm.toString(i), "].kind"));
             StellarStrkey.Kind expected = keccak256(bytes(kind)) == keccak256("account")
                 ? StellarStrkey.Kind.Account
                 : keccak256(bytes(kind)) == keccak256("contract")
@@ -109,7 +117,9 @@ contract CctpReturnTest is Test {
         for (uint256 i = 0; i < 3; i++) {
             string memory base = string.concat(".hooks.valid[", vm.toString(i), "]");
             string memory recipient = vm.parseJsonString(vectors, string.concat(base, ".recipient"));
-            assertEq(module.hookData(recipient), vm.parseJsonBytes(vectors, string.concat(base, ".hex")));
+            assertEq(
+                module.hookData(recipient), vm.parseJsonBytes(vectors, string.concat(base, ".hex"))
+            );
         }
     }
 
@@ -132,12 +142,13 @@ contract CctpReturnTest is Test {
     function test_malformedDestinationFailsBeforeBurn() public {
         string memory bad = vm.parseJsonString(vectors, ".invalidStrkeys[0].strkey");
         bytes memory action = _return(100e6, 0, 2000, bad);
-        AstrionAccount.ExecutionIntent memory i = _intent(address(module), address(messenger), action);
+        AstrionAccount.ExecutionIntent memory i =
+            _intent(address(module), address(messenger), action);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPk, account.intentDigest(i));
         vm.expectRevert(StellarStrkey.InvalidStrkey.selector);
         account.executeIntent(i, action, abi.encodePacked(r, s, v), 0);
         assertEq(messenger.burnCount(), 0);
-        assertEq(usdc.balanceOf(address(account)), 1_000e6);
+        assertEq(usdc.balanceOf(address(account)), 1000e6);
     }
 
     function test_feeFinalityAndAmountBounds() public {
@@ -153,7 +164,8 @@ contract CctpReturnTest is Test {
 
     function test_relayerRetryCannotRedirect() public {
         bytes memory action = _return(100e6, 0, 2000, G);
-        AstrionAccount.ExecutionIntent memory i = _intent(address(module), address(messenger), action);
+        AstrionAccount.ExecutionIntent memory i =
+            _intent(address(module), address(messenger), action);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPk, account.intentDigest(i));
         string memory other = vm.parseJsonString(vectors, ".strkeys[5].strkey");
         vm.expectRevert(AstrionAccount.ActionHashMismatch.selector);
@@ -174,7 +186,8 @@ contract CctpReturnTest is Test {
         CctpReturnModule morphoReturn =
             new CctpReturnModule(ProtocolIds.MORPHO_BLUE, messenger, address(usdc), forwarder);
         bytes memory action = _return(1e6, 0, 2000, G);
-        AstrionAccount.ExecutionIntent memory i = _intent(address(morphoReturn), address(messenger), action);
+        AstrionAccount.ExecutionIntent memory i =
+            _intent(address(morphoReturn), address(messenger), action);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPk, account.intentDigest(i));
         vm.expectRevert(AstrionAccount.WrongProtocol.selector);
         account.executeIntent(i, action, abi.encodePacked(r, s, v), 0);

@@ -38,8 +38,10 @@ contract OwnerDirectPlanTest is Test {
         AstrionAccountFactory factory = new AstrionAccountFactory(
             policy, IMessageTransmitterV2(address(0)), IERC20(address(usdc)), 6
         );
-        account = AstrionAccount(payable(factory.createAccount(owner, ProtocolIds.AAVE_V3, bytes32(0), 1)));
-        usdc.mint(address(account), 1_000e6);
+        account = AstrionAccount(
+            payable(factory.createAccount(owner, ProtocolIds.AAVE_V3, bytes32(0), 1))
+        );
+        usdc.mint(address(account), 1000e6);
     }
 
     function _direct(IActionModule mod, bytes memory action) internal {
@@ -67,12 +69,16 @@ contract OwnerDirectPlanTest is Test {
 
     function test_directReturnToStellar() public {
         MockTokenMessengerV2 messenger = new MockTokenMessengerV2();
-        CctpReturnModule ret =
-            new CctpReturnModule(ProtocolIds.AAVE_V3, messenger, address(usdc), bytes32(uint256(1)));
+        CctpReturnModule ret = new CctpReturnModule(
+            ProtocolIds.AAVE_V3, messenger, address(usdc), bytes32(uint256(1))
+        );
         _direct(
             ret,
             abi.encode(
-                uint256(300e6), uint256(0), uint32(2000), "GAUHMCMUP5FZO5675W3ISZ6E6CNYJGXBUW5WANE2JR4TGAARYCTSCBKI"
+                uint256(300e6),
+                uint256(0),
+                uint32(2000),
+                "GAUHMCMUP5FZO5675W3ISZ6E6CNYJGXBUW5WANE2JR4TGAARYCTSCBKI"
             )
         );
         assertEq(messenger.lastBurn().amount, 300e6);

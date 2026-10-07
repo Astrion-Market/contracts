@@ -49,7 +49,8 @@ contract AccountInvariantsTest is Test {
     }
 
     function invariant_valueIsConserved() public view {
-        uint256 held = usdc.balanceOf(address(account)) + pool.supplied(address(usdc), address(account));
+        uint256 held =
+            usdc.balanceOf(address(account)) + pool.supplied(address(usdc), address(account));
         uint256 debt = pool.debt(address(usdc), address(account));
         assertEq(
             held + handler.burned() + handler.ownerOut() + handler.fees(),

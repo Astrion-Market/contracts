@@ -20,7 +20,8 @@ contract AccountOps is Script {
         address recipient = vm.envOr("RECIPIENT", account.owner());
 
         require(module.protocol() == account.protocol(), "module protocol != account protocol");
-        AstrionAccount.Call[] memory calls = PlanCalls.planDirect(module, account, recipient, action);
+        AstrionAccount.Call[] memory calls =
+            PlanCalls.planDirect(module, account, recipient, action);
         for (uint256 i = 0; i < calls.length; i++) {
             console2.log("call", i, calls[i].target);
         }

@@ -16,9 +16,12 @@ contract Smoke is Script {
             string.concat(vm.projectRoot(), "/../deployments/crosschain/deployed/", net, ".json")
         );
         require(vm.parseJsonUint(d, ".chainId") == block.chainid, "wrong chain");
-        AstrionAccountFactory factory = AstrionAccountFactory(vm.parseJsonAddress(d, ".accountFactory"));
+        AstrionAccountFactory factory =
+            AstrionAccountFactory(vm.parseJsonAddress(d, ".accountFactory"));
         require(address(factory).code.length > 0, "factory missing");
-        require(address(factory.policy()) == vm.parseJsonAddress(d, ".routePolicy"), "policy mismatch");
+        require(
+            address(factory.policy()) == vm.parseJsonAddress(d, ".routePolicy"), "policy mismatch"
+        );
 
         address probeOwner = address(0xA11CE);
         address predicted = factory.predictAccount(probeOwner, ProtocolIds.AAVE_V3, bytes32(0), 1);

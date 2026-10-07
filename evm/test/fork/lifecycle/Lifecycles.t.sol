@@ -21,7 +21,9 @@ contract AaveV3LifecycleForkTest is LifecycleForkBase {
         if (!forked) return;
         _setUpLifecycle();
         module = new AaveV3Module(
-            IAavePoolAddressesProvider(0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D), BASE_USDC, BASE_WETH
+            IAavePoolAddressesProvider(0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D),
+            BASE_USDC,
+            BASE_WETH
         );
         _createAccount();
     }
@@ -76,7 +78,7 @@ contract AaveV3LifecycleForkTest is LifecycleForkBase {
     }
 
     function test_fullLifecycle() public {
-        _runLifecycle(5 ether, 1_000e6);
+        _runLifecycle(5 ether, 1000e6);
     }
 }
 
@@ -89,7 +91,7 @@ contract MorphoBlueLifecycleForkTest is LifecycleForkBase {
         _forkOrSkip(BASE_CHAIN_ID);
         if (!forked) return;
         _setUpLifecycle();
-        MockMorphoOracle oracle = new MockMorphoOracle(3_000e24);
+        MockMorphoOracle oracle = new MockMorphoOracle(3000e24);
         FixedRateIrm irm = new FixedRateIrm(uint256(0.1e18) / 365 days);
         vm.startPrank(MORPHO.owner());
         MORPHO.enableIrm(address(irm));
@@ -157,7 +159,7 @@ contract MorphoBlueLifecycleForkTest is LifecycleForkBase {
     }
 
     function test_fullLifecycle() public {
-        _runLifecycle(5 ether, 1_000e6);
+        _runLifecycle(5 ether, 1000e6);
     }
 }
 
@@ -222,6 +224,6 @@ contract CompoundV3LifecycleForkTest is LifecycleForkBase {
     }
 
     function test_fullLifecycle() public {
-        _runLifecycle(5 ether, 1_000e6);
+        _runLifecycle(5 ether, 1000e6);
     }
 }

@@ -73,10 +73,10 @@ contract CompoundV3BaseForkTest is AccountForkBase {
 
     function test_repayAllIsExactAfterInterest() public {
         _collateral(5 ether);
-        _act(CompoundV3Module.Kind.WithdrawBase, 1_000e6);
+        _act(CompoundV3Module.Kind.WithdrawBase, 1000e6);
         vm.warp(block.timestamp + 30 days);
         uint256 debt = COMET.borrowBalanceOf(address(account));
-        assertGt(debt, 1_000e6);
+        assertGt(debt, 1000e6);
         deal(BASE_USDC, address(account), debt);
         _act(CompoundV3Module.Kind.RepayAll, 0);
         assertEq(COMET.borrowBalanceOf(address(account)), 0);
@@ -86,7 +86,7 @@ contract CompoundV3BaseForkTest is AccountForkBase {
 
     function test_partialRepayLeavesDustDebtVisible() public {
         _collateral(5 ether);
-        _act(CompoundV3Module.Kind.WithdrawBase, 1_000e6);
+        _act(CompoundV3Module.Kind.WithdrawBase, 1000e6);
         vm.warp(block.timestamp + 1 days);
         uint256 debt = COMET.borrowBalanceOf(address(account));
         deal(BASE_USDC, address(account), debt - 1);
@@ -97,10 +97,10 @@ contract CompoundV3BaseForkTest is AccountForkBase {
 
     function test_collateralWithdrawalSafety() public {
         _collateral(1 ether);
-        _act(CompoundV3Module.Kind.WithdrawBase, 1_000e6);
+        _act(CompoundV3Module.Kind.WithdrawBase, 1000e6);
         _actReverts(CompoundV3Module.Kind.WithdrawCollateral, type(uint256).max);
 
-        deal(BASE_USDC, address(account), 2_000e6);
+        deal(BASE_USDC, address(account), 2000e6);
         _act(CompoundV3Module.Kind.RepayAll, 0);
         _act(CompoundV3Module.Kind.WithdrawCollateral, type(uint256).max);
         assertEq(weth.balanceOf(address(account)), 1 ether);
@@ -115,11 +115,11 @@ contract CompoundV3BaseForkTest is AccountForkBase {
 
     function test_withdrawPauseBlocksBorrowButNotRepay() public {
         _collateral(5 ether);
-        _act(CompoundV3Module.Kind.WithdrawBase, 1_000e6);
+        _act(CompoundV3Module.Kind.WithdrawBase, 1000e6);
         vm.prank(COMET.pauseGuardian());
         COMET.pause(false, false, true, false, false);
         _actReverts(CompoundV3Module.Kind.WithdrawBase, 100e6);
-        deal(BASE_USDC, address(account), 2_000e6);
+        deal(BASE_USDC, address(account), 2000e6);
         _act(CompoundV3Module.Kind.RepayAll, 0);
         assertEq(_pos().baseBorrowed, 0);
         assertTrue(lens.market(COMET, BASE_WETH).withdrawPaused);

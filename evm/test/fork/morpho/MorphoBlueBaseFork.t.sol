@@ -16,7 +16,7 @@ import {FixedRateIrm, MockMorphoOracle} from "../../mocks/MorphoMocks.sol";
 contract MorphoBlueBaseForkTest is AccountForkBase {
     IMorphoBlue constant MORPHO = IMorphoBlue(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb);
     uint256 constant LLTV = 0.86e18;
-    uint256 constant WETH_PRICE = 3_000e24;
+    uint256 constant WETH_PRICE = 3000e24;
     uint256 constant LIQUIDITY = 100_000e6;
 
     MockMorphoOracle oracle;
@@ -95,13 +95,13 @@ contract MorphoBlueBaseForkTest is AccountForkBase {
     function test_debtSharesFixedWhileAssetsGrowAndRepayAllIsExact() public {
         deal(BASE_WETH, address(account), 2 ether);
         _act(MorphoBlueModule.Kind.SupplyCollateral, 2 ether);
-        _act(MorphoBlueModule.Kind.Borrow, 1_000e6);
+        _act(MorphoBlueModule.Kind.Borrow, 1000e6);
         uint256 sharesBefore = lens.position(params, address(account)).borrowShares;
 
         vm.warp(block.timestamp + 90 days);
         MorphoBlueLens.Position memory p = lens.position(params, address(account));
         assertEq(p.borrowShares, sharesBefore);
-        assertGt(p.borrowAssets, 1_000e6);
+        assertGt(p.borrowAssets, 1000e6);
 
         deal(BASE_USDC, address(account), p.borrowAssets);
         _act(MorphoBlueModule.Kind.RepayAll, 0);
@@ -117,7 +117,7 @@ contract MorphoBlueBaseForkTest is AccountForkBase {
     function test_repayAvailableKeepsResidualDebt() public {
         deal(BASE_WETH, address(account), 2 ether);
         _act(MorphoBlueModule.Kind.SupplyCollateral, 2 ether);
-        _act(MorphoBlueModule.Kind.Borrow, 1_000e6);
+        _act(MorphoBlueModule.Kind.Borrow, 1000e6);
         vm.warp(block.timestamp + 30 days);
         deal(BASE_USDC, address(account), 300e6);
         _act(MorphoBlueModule.Kind.RepayAvailable, 0);
@@ -127,7 +127,7 @@ contract MorphoBlueBaseForkTest is AccountForkBase {
     function test_oracleFailureBlocksBorrowButNotRepay() public {
         deal(BASE_WETH, address(account), 2 ether);
         _act(MorphoBlueModule.Kind.SupplyCollateral, 2 ether);
-        _act(MorphoBlueModule.Kind.Borrow, 1_000e6);
+        _act(MorphoBlueModule.Kind.Borrow, 1000e6);
         oracle.setBroken(true);
         _actReverts(MorphoBlueModule.Kind.Borrow, 1e6);
         assertFalse(lens.position(params, address(account)).oracleOk);
@@ -143,8 +143,8 @@ contract MorphoBlueBaseForkTest is AccountForkBase {
     }
 
     function test_illiquidMarketRejectsBorrow() public {
-        deal(BASE_WETH, address(account), 1_000 ether);
-        _act(MorphoBlueModule.Kind.SupplyCollateral, 1_000 ether);
+        deal(BASE_WETH, address(account), 1000 ether);
+        _act(MorphoBlueModule.Kind.SupplyCollateral, 1000 ether);
         _actReverts(MorphoBlueModule.Kind.Borrow, LIQUIDITY + 1);
     }
 
@@ -162,8 +162,8 @@ contract MorphoBlueBaseForkTest is AccountForkBase {
     }
 
     function test_positionBelongsToTheAccount() public {
-        deal(BASE_USDC, address(account), 5_000e6);
-        _act(MorphoBlueModule.Kind.Supply, 5_000e6);
+        deal(BASE_USDC, address(account), 5000e6);
+        _act(MorphoBlueModule.Kind.Supply, 5000e6);
         (uint256 shares,,) = MORPHO.position(module.marketId(), address(account));
         (uint256 factoryShares,,) = MORPHO.position(module.marketId(), address(factory));
         (uint256 moduleShares,,) = MORPHO.position(module.marketId(), address(module));
@@ -174,6 +174,6 @@ contract MorphoBlueBaseForkTest is AccountForkBase {
         _act(MorphoBlueModule.Kind.Withdraw, type(uint256).max);
         (shares,,) = MORPHO.position(module.marketId(), address(account));
         assertEq(shares, 0);
-        assertGe(usdc.balanceOf(address(account)), 5_000e6 - 1);
+        assertGe(usdc.balanceOf(address(account)), 5000e6 - 1);
     }
 }

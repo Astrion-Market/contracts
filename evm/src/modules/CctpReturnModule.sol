@@ -50,11 +50,12 @@ contract CctpReturnModule is IActionModule {
         return s == ITokenMessengerV2.depositForBurnWithHook.selector;
     }
 
-    function encodeAction(uint256 amount, uint256 maxFee, uint32 minFinality, string calldata recipient)
-        external
-        pure
-        returns (bytes memory)
-    {
+    function encodeAction(
+        uint256 amount,
+        uint256 maxFee,
+        uint32 minFinality,
+        string calldata recipient
+    ) external pure returns (bytes memory) {
         return abi.encode(amount, maxFee, minFinality, recipient);
     }
 

@@ -94,7 +94,13 @@ interface IMorphoBlue {
     function idToMarketParams(bytes32 id)
         external
         view
-        returns (address loanToken, address collateralToken, address oracle, address irm, uint256 lltv);
+        returns (
+            address loanToken,
+            address collateralToken,
+            address oracle,
+            address irm,
+            uint256 lltv
+        );
 }
 
 interface IMorphoIrm {

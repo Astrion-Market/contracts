@@ -72,7 +72,9 @@ contract AccountHandler is Test {
         attacker = makeAddr("attacker");
         relayer = makeAddr("relayer");
         module = new MockPoolModule(address(pool_), address(usdc_));
-        returnModule = new CctpReturnModule(ProtocolIds.AAVE_V3, messenger_, address(usdc_), bytes32(uint256(1)));
+        returnModule = new CctpReturnModule(
+            ProtocolIds.AAVE_V3, messenger_, address(usdc_), bytes32(uint256(1))
+        );
     }
 
     function inboundCount() external view returns (uint256) {
@@ -83,8 +85,11 @@ contract AccountHandler is Test {
         return inbounds[i].transferId;
     }
 
-    function _newInbound(uint256 amountSeed, uint256 feeSeed) internal returns (Inbound memory ib, uint256 net) {
-        uint256 amount = bound(amountSeed, 1e6, 1_000e6);
+    function _newInbound(uint256 amountSeed, uint256 feeSeed)
+        internal
+        returns (Inbound memory ib, uint256 net)
+    {
+        uint256 amount = bound(amountSeed, 1e6, 1000e6);
         uint256 fee = bound(feeSeed, 0, amount / 100);
         bytes32 n = bytes32(cctpNonce++);
         ib = Inbound(
@@ -93,10 +98,13 @@ contract AccountHandler is Test {
         net = amount - fee;
     }
 
-    function _intent(address mod, address target, bytes memory action, bytes32 transferId, uint256 maxFee)
-        internal
-        returns (AstrionAccount.ExecutionIntent memory i)
-    {
+    function _intent(
+        address mod,
+        address target,
+        bytes memory action,
+        bytes32 transferId,
+        uint256 maxFee
+    ) internal returns (AstrionAccount.ExecutionIntent memory i) {
         i = AstrionAccount.ExecutionIntent({
             module: mod,
             moduleCodeHash: mod.codehash,
@@ -112,13 +120,18 @@ contract AccountHandler is Test {
         });
     }
 
-    function _sign(AstrionAccount.ExecutionIntent memory i, uint256 pk) internal view returns (bytes memory) {
+    function _sign(AstrionAccount.ExecutionIntent memory i, uint256 pk)
+        internal
+        view
+        returns (bytes memory)
+    {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, account.intentDigest(i));
         return abi.encodePacked(r, s, v);
     }
 
     function _relay(bytes memory action) internal returns (bool ok) {
-        AstrionAccount.ExecutionIntent memory i = _intent(address(module), address(pool), action, 0, 0);
+        AstrionAccount.ExecutionIntent memory i =
+            _intent(address(module), address(pool), action, 0, 0);
         bytes memory sig = _sign(i, ownerPk);
         vm.prank(relayer);
         try account.executeIntent(i, action, sig, 0) {
@@ -143,12 +156,18 @@ contract AccountHandler is Test {
         } catch {}
     }
 
-    function fundedSupply(uint256 amountSeed, uint256 feeSeed, uint256 supplySeed, uint256 relayerFeeSeed) external {
+    function fundedSupply(
+        uint256 amountSeed,
+        uint256 feeSeed,
+        uint256 supplySeed,
+        uint256 relayerFeeSeed
+    ) external {
         (Inbound memory ib, uint256 net) = _newInbound(amountSeed, feeSeed);
         uint256 supply = bound(supplySeed, 1, net * 2);
         uint256 fee = bound(relayerFeeSeed, 0, 1e6);
         bytes memory action = abi.encode(SUPPLY, supply);
-        AstrionAccount.ExecutionIntent memory i = _intent(address(module), address(pool), action, ib.transferId, 1e6);
+        AstrionAccount.ExecutionIntent memory i =
+            _intent(address(module), address(pool), action, ib.transferId, 1e6);
         bytes memory sig = _sign(i, ownerPk);
         vm.prank(relayer);
         bool executed = account.executeFundedIntent(i, action, sig, fee, ib.message, attestation);
@@ -166,7 +185,8 @@ contract AccountHandler is Test {
         (bool recorded, bool consumed,,,,,) = account.receipts(ib.transferId);
         if (!recorded || consumed) return;
         bytes memory action = abi.encode(SUPPLY, bound(supplySeed, 1, 100e6));
-        AstrionAccount.ExecutionIntent memory i = _intent(address(module), address(pool), action, ib.transferId, 0);
+        AstrionAccount.ExecutionIntent memory i =
+            _intent(address(module), address(pool), action, ib.transferId, 0);
         bytes memory sig = _sign(i, ownerPk);
         vm.prank(relayer);
         if (account.executeFundedIntent(i, action, sig, 0, "", "")) fundedExecuted++;
@@ -177,7 +197,8 @@ contract AccountHandler is Test {
         uint256 pk = bound(attackerPkSeed, 1, 1e30);
         if (vm.addr(pk) == owner) return;
         bytes memory action = abi.encode(WITHDRAW, uint256(1));
-        AstrionAccount.ExecutionIntent memory i = _intent(address(module), address(pool), action, ib.transferId, 1e6);
+        AstrionAccount.ExecutionIntent memory i =
+            _intent(address(module), address(pool), action, ib.transferId, 1e6);
         i.recipient = attacker;
         bytes memory sig = _sign(i, pk);
         vm.prank(attacker);
@@ -194,7 +215,8 @@ contract AccountHandler is Test {
 
     function repay(uint256 amountSeed) external {
         uint256 debt = pool.debt(address(usdc), address(account));
-        uint256 cap = debt < usdc.balanceOf(address(account)) ? debt : usdc.balanceOf(address(account));
+        uint256 cap =
+            debt < usdc.balanceOf(address(account)) ? debt : usdc.balanceOf(address(account));
         if (cap == 0) return;
         uint256 amount = bound(amountSeed, 1, cap);
         if (_relay(abi.encode(REPAY, amount))) repaid += amount;
@@ -221,7 +243,8 @@ contract AccountHandler is Test {
         if (bal == 0) return;
         uint256 amount = bound(amountSeed, 1, bal);
         bytes memory action = abi.encode(amount, uint256(0), uint32(2000), G);
-        AstrionAccount.ExecutionIntent memory i = _intent(address(returnModule), address(messenger), action, 0, 0);
+        AstrionAccount.ExecutionIntent memory i =
+            _intent(address(returnModule), address(messenger), action, 0, 0);
         bytes memory sig = _sign(i, ownerPk);
         vm.prank(relayer);
         account.executeIntent(i, action, sig, 0);
@@ -242,7 +265,9 @@ contract AccountHandler is Test {
         uint256 bal = usdc.balanceOf(address(account));
         if (bal == 0) return;
         vm.prank(attacker);
-        try account.execute(address(usdc), 0, abi.encodeCall(IERC20.transfer, (attacker, bound(amountSeed, 1, bal)))) {
+        try account.execute(
+            address(usdc), 0, abi.encodeCall(IERC20.transfer, (attacker, bound(amountSeed, 1, bal)))
+        ) {
             violation = "attacker executed";
         } catch {}
     }

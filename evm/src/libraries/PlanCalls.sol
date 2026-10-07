@@ -15,7 +15,8 @@ library PlanCalls {
     {
         calls = new AstrionAccount.Call[](p.calls.length);
         for (uint256 i = 0; i < p.calls.length; i++) {
-            calls[i] = AstrionAccount.Call({target: p.calls[i].target, value: 0, data: p.calls[i].data});
+            calls[i] =
+                AstrionAccount.Call({target: p.calls[i].target, value: 0, data: p.calls[i].data});
         }
     }
 

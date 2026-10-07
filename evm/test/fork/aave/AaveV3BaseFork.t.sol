@@ -60,14 +60,14 @@ contract AaveV3BaseForkTest is AccountForkBase {
     }
 
     function test_supplyAccruesInterestAndWithdrawsExactly() public {
-        deal(BASE_USDC, address(account), 1_000e6);
-        _act(AaveV3Module.Kind.Supply, BASE_USDC, 1_000e6);
+        deal(BASE_USDC, address(account), 1000e6);
+        _act(AaveV3Module.Kind.Supply, BASE_USDC, 1000e6);
         assertEq(usdc.balanceOf(address(account)), 0);
         assertEq(usdc.allowance(address(account), pool), 0);
 
         vm.warp(block.timestamp + 30 days);
         uint256 supplied = lens.position(address(account), BASE_USDC, BASE_WETH).loanSupplied;
-        assertGt(supplied, 1_000e6, "interest accrued");
+        assertGt(supplied, 1000e6, "interest accrued");
 
         _act(AaveV3Module.Kind.Withdraw, BASE_USDC, type(uint256).max);
         assertEq(usdc.balanceOf(address(account)), supplied, "exact delta");
@@ -75,15 +75,15 @@ contract AaveV3BaseForkTest is AccountForkBase {
     }
 
     function test_collateralBorrowRepayAllAndWithdraw() public {
-        _collateralAndBorrow(1_000e6);
+        _collateralAndBorrow(1000e6);
         AaveV3Lens.Position memory p = lens.position(address(account), BASE_USDC, BASE_WETH);
-        assertEq(usdc.balanceOf(address(account)), 1_000e6);
+        assertEq(usdc.balanceOf(address(account)), 1000e6);
         assertGt(p.healthFactor, 1e18);
         assertGt(p.loanVariableDebt, 0);
 
         vm.warp(block.timestamp + 7 days);
         uint256 debt = module.variableDebtOf(address(account));
-        assertGt(debt, 1_000e6, "debt accrued");
+        assertGt(debt, 1000e6, "debt accrued");
         deal(BASE_USDC, address(account), debt);
 
         _act(AaveV3Module.Kind.RepayAll, BASE_USDC, 0);
@@ -96,7 +96,7 @@ contract AaveV3BaseForkTest is AccountForkBase {
     }
 
     function test_repayAvailableLeavesRemainingDebtVisible() public {
-        _collateralAndBorrow(1_000e6);
+        _collateralAndBorrow(1000e6);
         vm.warp(block.timestamp + 7 days);
         deal(BASE_USDC, address(account), 400e6);
         _act(AaveV3Module.Kind.RepayAvailable, BASE_USDC, 0);
@@ -111,15 +111,15 @@ contract AaveV3BaseForkTest is AccountForkBase {
     }
 
     function test_unsafeCollateralWithdrawalReverts() public {
-        _collateralAndBorrow(5_000e6);
+        _collateralAndBorrow(5000e6);
         _actReverts(AaveV3Module.Kind.Withdraw, BASE_WETH, type(uint256).max);
     }
 
     function test_frozenReserveBlocksSupplyButAllowsRepay() public {
-        _collateralAndBorrow(1_000e6);
+        _collateralAndBorrow(1000e6);
         _admin().setReserveFreeze(BASE_USDC, true);
 
-        deal(BASE_USDC, address(account), 2_000e6);
+        deal(BASE_USDC, address(account), 2000e6);
         _actReverts(AaveV3Module.Kind.Supply, BASE_USDC, 100e6);
         _act(AaveV3Module.Kind.RepayAll, BASE_USDC, 0);
         assertEq(module.variableDebtOf(address(account)), 0);

@@ -24,7 +24,9 @@ contract CctpReturnBaseForkTest is AccountForkBase {
     function setUp() public {
         _forkOrSkip(BASE_CHAIN_ID);
         if (!forked) return;
-        if (ITokenMessengerV2Remote(BASE_TOKEN_MESSENGER_V2).remoteTokenMessengers(27) == bytes32(0)) {
+        if (
+            ITokenMessengerV2Remote(BASE_TOKEN_MESSENGER_V2).remoteTokenMessengers(27) == bytes32(0)
+        ) {
             emit log("SKIPPED: Stellar domain 27 not registered at this fork block");
             vm.skip(true);
             return;
@@ -38,7 +40,12 @@ contract CctpReturnBaseForkTest is AccountForkBase {
 
     function test_realBurnToStellarDebitsExactly() public {
         deal(BASE_USDC, address(account), 100e6);
-        _exec(account, address(module), BASE_TOKEN_MESSENGER_V2, abi.encode(uint256(100e6), uint256(1e6), uint32(2000), G));
+        _exec(
+            account,
+            address(module),
+            BASE_TOKEN_MESSENGER_V2,
+            abi.encode(uint256(100e6), uint256(1e6), uint32(2000), G)
+        );
         assertEq(IERC20(BASE_USDC).balanceOf(address(account)), 0);
         assertEq(IERC20(BASE_USDC).allowance(address(account), BASE_TOKEN_MESSENGER_V2), 0);
     }
