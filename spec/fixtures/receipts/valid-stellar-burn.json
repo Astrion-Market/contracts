@@ -1,0 +1,30 @@
+{
+  "description": "Stellar burn: 7-decimal sent, 6-decimal burned, 7th-decimal dust retained",
+  "expect": "ok",
+  "receipt": {
+    "schemaVersion": 1,
+    "intentId": "0x421e81356146acb0e1c50a73ffbb5c436b908129e4552cd6dc798b1b3866fbdf",
+    "kind": "cctp_burn",
+    "network": "stellar-testnet",
+    "txId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "blockOrLedger": 1000,
+    "finality": "final",
+    "cctp": {
+      "sourceDomain": 27,
+      "destinationDomain": 6,
+      "nonce": "0x0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    "sent": {
+      "raw": "1000000005",
+      "decimals": 7
+    },
+    "burned": {
+      "raw": "100000000",
+      "decimals": 6
+    },
+    "dust": {
+      "raw": "5",
+      "decimals": 7
+    }
+  }
+}

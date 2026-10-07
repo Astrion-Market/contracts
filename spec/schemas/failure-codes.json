@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astrion.market/spec/v1/failure-codes.json",
+  "title": "Failure codes",
+  "description": "retryable: the same intent may be retried. Non-retryable failures go to owner recovery. A burn is never retried as a new burn.",
+  "$defs": {
+    "code": {
+      "enum": [
+        "UnsupportedSchemaVersion", "UnknownNetwork", "EnvironmentMismatch", "InvalidRoute",
+        "InvalidAmount", "AmountTooLarge", "DecimalsMismatch", "FeeExceedsAmount",
+        "InvalidAddress", "InvalidDeadline", "InvalidNonce", "NonCanonicalEncoding", "IntentIdMismatch", "DuplicateIntent",
+        "MissingTrustline", "AttestationPending", "AttestationFailed", "MintAlreadyUsed",
+        "ActionExpired", "ActionReverted", "InsufficientReceived", "RoutePaused",
+        "ReconciliationMismatch"
+      ]
+    }
+  },
+  "retryable": {
+    "AttestationPending": true,
+    "MissingTrustline": true,
+    "ActionReverted": true,
+    "RoutePaused": true
+  }
+}

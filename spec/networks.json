@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "networks": [
+    { "id": "ethereum", "kind": "evm", "environment": "mainnet", "chainId": 1, "cctpDomain": 0, "usdcDecimals": 6 },
+    { "id": "base", "kind": "evm", "environment": "mainnet", "chainId": 8453, "cctpDomain": 6, "usdcDecimals": 6 },
+    { "id": "stellar", "kind": "stellar", "environment": "mainnet", "networkPassphrase": "Public Global Stellar Network ; September 2015", "cctpDomain": 27, "usdcDecimals": 7 },
+    { "id": "ethereum-sepolia", "kind": "evm", "environment": "testnet", "chainId": 11155111, "cctpDomain": 0, "usdcDecimals": 6 },
+    { "id": "base-sepolia", "kind": "evm", "environment": "testnet", "chainId": 84532, "cctpDomain": 6, "usdcDecimals": 6 },
+    { "id": "stellar-testnet", "kind": "stellar", "environment": "testnet", "networkPassphrase": "Test SDF Network ; September 2015", "cctpDomain": 27, "usdcDecimals": 7 }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "description": "Stellar mint: received scaled to 7 decimals",
+  "expect": "ok",
+  "receipt": {
+    "schemaVersion": 1,
+    "intentId": "0x421e81356146acb0e1c50a73ffbb5c436b908129e4552cd6dc798b1b3866fbdf",
+    "kind": "cctp_mint",
+    "network": "stellar-testnet",
+    "txId": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "blockOrLedger": 2000,
+    "finality": "final",
+    "cctp": {
+      "sourceDomain": 6,
+      "destinationDomain": 27,
+      "nonce": "0x0202020202020202020202020202020202020202020202020202020202020202"
+    },
+    "burned": {
+      "raw": "100000000",
+      "decimals": 6
+    },
+    "fee": {
+      "raw": "10000",
+      "decimals": 6
+    },
+    "received": {
+      "raw": "999900000",
+      "decimals": 7
+    }
+  }
+}

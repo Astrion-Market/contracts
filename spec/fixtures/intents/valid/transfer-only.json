@@ -1,0 +1,31 @@
+{
+  "description": "Plain USDC transfer to the owner's EVM wallet, no protocol action",
+  "expect": "ok",
+  "intents": [
+    {
+      "schemaVersion": 1,
+      "action": "transfer",
+      "sourceNetwork": "stellar-testnet",
+      "destinationNetwork": "base-sepolia",
+      "asset": {
+        "symbol": "USDC"
+      },
+      "amount": {
+        "raw": "1000000000",
+        "decimals": 7
+      },
+      "positionOwner": "0x1111111111111111111111111111111111111111",
+      "recipient": "0x1111111111111111111111111111111111111111",
+      "refundRecipient": "GAUHMCMUP5FZO5675W3ISZ6E6CNYJGXBUW5WANE2JR4TGAARYCTSCBKI",
+      "maxFee": {
+        "raw": "5000000",
+        "decimals": 7
+      },
+      "createdAt": 1791360000,
+      "actionDeadline": 1791363600,
+      "deliveryTimeoutSecs": 1800,
+      "nonce": "3",
+      "intentId": "0x0ca9f9aefcb03cb2abe3238c8c3c62ec566475f1604bd37d1ebdf6ecd7f8d8f2"
+    }
+  ]
+}

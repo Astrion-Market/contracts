@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astrion.market/spec/v1/network.schema.json",
+  "title": "Network registry",
+  "description": "EVM chain IDs and CCTP domains are separate fields. Mainnet and testnet entries are separate even where domains match.",
+  "type": "object",
+  "required": ["schemaVersion", "networks"],
+  "properties": {
+    "schemaVersion": { "$ref": "common.schema.json#/$defs/schemaVersion" },
+    "networks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "environment", "cctpDomain", "usdcDecimals"],
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/networkId" },
+          "kind": { "enum": ["evm", "stellar"] },
+          "environment": { "enum": ["mainnet", "testnet"] },
+          "chainId": { "type": "integer", "minimum": 1 },
+          "networkPassphrase": { "type": "string" },
+          "cctpDomain": { "type": "integer", "minimum": 0 },
+          "usdcDecimals": { "type": "integer", "enum": [6, 7] }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "kind": { "const": "evm" } } },
+            "then": { "required": ["chainId"], "not": { "required": ["networkPassphrase"] } }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "stellar" } } },
+            "then": { "required": ["networkPassphrase"], "not": { "required": ["chainId"] } }
+          }
+        ]
+      }
+    }
+  }
+}

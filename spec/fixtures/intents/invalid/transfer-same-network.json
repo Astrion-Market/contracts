@@ -1,0 +1,31 @@
+{
+  "description": "Transfer whose source equals destination",
+  "expect": "InvalidRoute",
+  "intents": [
+    {
+      "schemaVersion": 1,
+      "action": "transfer",
+      "sourceNetwork": "stellar-testnet",
+      "destinationNetwork": "stellar-testnet",
+      "asset": {
+        "symbol": "USDC"
+      },
+      "amount": {
+        "raw": "1000000000",
+        "decimals": 7
+      },
+      "positionOwner": "0x1111111111111111111111111111111111111111",
+      "recipient": "GAUHMCMUP5FZO5675W3ISZ6E6CNYJGXBUW5WANE2JR4TGAARYCTSCBKI",
+      "refundRecipient": "GAUHMCMUP5FZO5675W3ISZ6E6CNYJGXBUW5WANE2JR4TGAARYCTSCBKI",
+      "maxFee": {
+        "raw": "5000000",
+        "decimals": 7
+      },
+      "createdAt": 1791360000,
+      "actionDeadline": 1791363600,
+      "deliveryTimeoutSecs": 1800,
+      "nonce": "3",
+      "intentId": "0xaa47eeae5951de8ec62223ac9e5c75c61fa4cbe58edb597b790050975e55f5c8"
+    }
+  ]
+}

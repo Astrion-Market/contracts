@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astrion.market/spec/v1/receipt.schema.json",
+  "title": "Per-leg receipt",
+  "description": "One on-chain leg with its own identifier and finality. Reconciliation: for a cctp_burn from Stellar, burned = floor(sent / 10) in 6-decimal units and dust = sent mod 10 (7-decimal units, stays on Stellar). For a cctp_mint, received = burned - fee.",
+  "type": "object",
+  "required": ["schemaVersion", "intentId", "kind", "network", "txId", "finality"],
+  "properties": {
+    "schemaVersion": { "$ref": "common.schema.json#/$defs/schemaVersion" },
+    "intentId": { "$ref": "common.schema.json#/$defs/bytes32" },
+    "kind": { "enum": ["cctp_burn", "cctp_mint", "protocol_action"] },
+    "network": { "$ref": "common.schema.json#/$defs/networkId" },
+    "txId": { "$ref": "common.schema.json#/$defs/txId" },
+    "blockOrLedger": { "type": "integer", "minimum": 0 },
+    "finality": { "enum": ["pending", "soft", "final", "reorged"] },
+    "cctp": {
+      "type": "object",
+      "required": ["sourceDomain", "destinationDomain", "nonce"],
+      "properties": {
+        "sourceDomain": { "type": "integer", "minimum": 0 },
+        "destinationDomain": { "type": "integer", "minimum": 0 },
+        "nonce": { "$ref": "common.schema.json#/$defs/bytes32" }
+      }
+    },
+    "sent": { "$ref": "common.schema.json#/$defs/amount" },
+    "burned": { "$ref": "common.schema.json#/$defs/amount" },
+    "dust": { "$ref": "common.schema.json#/$defs/amount" },
+    "fee": { "$ref": "common.schema.json#/$defs/amount" },
+    "received": { "$ref": "common.schema.json#/$defs/amount" }
+  }
+}

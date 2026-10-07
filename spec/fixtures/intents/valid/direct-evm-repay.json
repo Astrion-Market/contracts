@@ -1,0 +1,33 @@
+{
+  "description": "Direct EVM repayment without a bridge leg",
+  "expect": "ok",
+  "intents": [
+    {
+      "schemaVersion": 1,
+      "action": "repay",
+      "sourceNetwork": "base-sepolia",
+      "destinationNetwork": "base-sepolia",
+      "asset": {
+        "symbol": "USDC"
+      },
+      "amount": {
+        "raw": "25000000",
+        "decimals": 6
+      },
+      "protocol": "aave-v3",
+      "marketScope": "0x000000000000000000000000036cbd53842c5426634e7929541ec2318f3dcf7e",
+      "positionOwner": "0x1111111111111111111111111111111111111111",
+      "recipient": "0x2222222222222222222222222222222222222222",
+      "refundRecipient": "0x2222222222222222222222222222222222222222",
+      "maxFee": {
+        "raw": "0",
+        "decimals": 6
+      },
+      "createdAt": 1791360000,
+      "actionDeadline": 1791363600,
+      "deliveryTimeoutSecs": 1800,
+      "nonce": "4",
+      "intentId": "0x1d718bb8cba2fb52b30f6bb3b32eb7a944f6d0609dfa7aff128fa3281bcc61eb"
+    }
+  ]
+}

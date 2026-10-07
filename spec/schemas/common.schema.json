@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astrion.market/spec/v1/common.schema.json",
+  "title": "Astrion cross-chain common definitions",
+  "$defs": {
+    "schemaVersion": {
+      "description": "Major schema version. Consumers reject unknown majors; within a major only optional fields are added.",
+      "type": "integer",
+      "const": 1
+    },
+    "networkId": {
+      "description": "Canonical network identifier from spec/networks.json. Never a bare chain ID or CCTP domain.",
+      "type": "string",
+      "enum": ["ethereum", "base", "stellar", "ethereum-sepolia", "base-sepolia", "stellar-testnet"]
+    },
+    "rawAmount": {
+      "description": "Unsigned integer in the token's smallest unit, as a decimal string without leading zeros. At most i64::MAX (Stellar classic asset limit).",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,18})$"
+    },
+    "amount": {
+      "type": "object",
+      "required": ["raw", "decimals"],
+      "properties": {
+        "raw": { "$ref": "#/$defs/rawAmount" },
+        "decimals": { "type": "integer", "enum": [6, 7] }
+      }
+    },
+    "evmAddress": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+    "stellarAddress": {
+      "description": "Stellar strkey: G (account), C (contract) or M (muxed account). Checksums are verified by the codec (C06).",
+      "type": "string",
+      "pattern": "^([GC][A-Z2-7]{55}|M[A-Z2-7]{68})$"
+    },
+    "address": {
+      "oneOf": [{ "$ref": "#/$defs/evmAddress" }, { "$ref": "#/$defs/stellarAddress" }]
+    },
+    "bytes32": { "type": "string", "pattern": "^0x[0-9a-f]{64}$" },
+    "uint256": { "type": "string", "pattern": "^(0|[1-9][0-9]{0,77})$" },
+    "unixSeconds": { "type": "integer", "minimum": 0 },
+    "protocol": { "type": "string", "enum": ["aave-v3", "morpho-blue", "compound-v3"] },
+    "txId": {
+      "description": "EVM tx hash (0x + 64 hex) or Stellar tx hash (64 hex).",
+      "type": "string",
+      "pattern": "^(0x)?[0-9a-f]{64}$"
+    }
+  }
+}

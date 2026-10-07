@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astrion.market/spec/v1/status.schema.json",
+  "title": "Operation status",
+  "description": "phase is a UI projection. Truth lives in the per-leg receipts; never infer a position from a source transaction alone.",
+  "type": "object",
+  "required": ["schemaVersion", "intentId", "phase", "updatedAt", "legs"],
+  "properties": {
+    "schemaVersion": { "$ref": "common.schema.json#/$defs/schemaVersion" },
+    "intentId": { "$ref": "common.schema.json#/$defs/bytes32" },
+    "phase": {
+      "enum": [
+        "draft", "source_submitted", "source_confirmed", "attestation_pending",
+        "destination_minted", "action_pending", "completed",
+        "failed_retryable", "action_expired", "owner_recovery"
+      ]
+    },
+    "updatedAt": { "$ref": "common.schema.json#/$defs/unixSeconds" },
+    "legs": { "type": "array", "items": { "$ref": "receipt.schema.json" } },
+    "failure": {
+      "type": "object",
+      "required": ["code"],
+      "properties": {
+        "code": { "$ref": "failure-codes.json#/$defs/code" },
+        "detail": { "type": "string" }
+      }
+    }
+  }
+}

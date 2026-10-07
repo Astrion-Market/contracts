@@ -1,0 +1,60 @@
+{
+  "description": "Two distinct intents in one batch",
+  "expect": "ok",
+  "intents": [
+    {
+      "schemaVersion": 1,
+      "action": "lend",
+      "sourceNetwork": "stellar-testnet",
+      "destinationNetwork": "base-sepolia",
+      "asset": {
+        "symbol": "USDC"
+      },
+      "amount": {
+        "raw": "1000000000",
+        "decimals": 7
+      },
+      "protocol": "aave-v3",
+      "marketScope": "0x000000000000000000000000036cbd53842c5426634e7929541ec2318f3dcf7e",
+      "positionOwner": "0x1111111111111111111111111111111111111111",
+      "recipient": "0x2222222222222222222222222222222222222222",
+      "refundRecipient": "GAUHMCMUP5FZO5675W3ISZ6E6CNYJGXBUW5WANE2JR4TGAARYCTSCBKI",
+      "maxFee": {
+        "raw": "5000000",
+        "decimals": 7
+      },
+      "createdAt": 1791360000,
+      "actionDeadline": 1791363600,
+      "deliveryTimeoutSecs": 1800,
+      "nonce": "1",
+      "intentId": "0x421e81356146acb0e1c50a73ffbb5c436b908129e4552cd6dc798b1b3866fbdf"
+    },
+    {
+      "schemaVersion": 1,
+      "action": "borrow",
+      "sourceNetwork": "base-sepolia",
+      "destinationNetwork": "stellar-testnet",
+      "asset": {
+        "symbol": "USDC"
+      },
+      "amount": {
+        "raw": "50000000",
+        "decimals": 6
+      },
+      "protocol": "morpho-blue",
+      "marketScope": "0xabababababababababababababababababababababababababababababababab",
+      "positionOwner": "0x1111111111111111111111111111111111111111",
+      "recipient": "GAUHMCMUP5FZO5675W3ISZ6E6CNYJGXBUW5WANE2JR4TGAARYCTSCBKI",
+      "refundRecipient": "0x2222222222222222222222222222222222222222",
+      "maxFee": {
+        "raw": "100000",
+        "decimals": 6
+      },
+      "createdAt": 1791360000,
+      "actionDeadline": 1791363600,
+      "deliveryTimeoutSecs": 1800,
+      "nonce": "2",
+      "intentId": "0x2c176060c83a92728c55bdc0f75a51888a7ba0e6511445f157256b3e38f1e6bc"
+    }
+  ]
+}

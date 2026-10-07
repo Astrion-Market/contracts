@@ -1,0 +1,33 @@
+{
+  "description": "Non-canonical amount encoding",
+  "expect": "InvalidAmount",
+  "intents": [
+    {
+      "schemaVersion": 1,
+      "action": "lend",
+      "sourceNetwork": "stellar-testnet",
+      "destinationNetwork": "base-sepolia",
+      "asset": {
+        "symbol": "USDC"
+      },
+      "amount": {
+        "raw": "01000",
+        "decimals": 7
+      },
+      "protocol": "aave-v3",
+      "marketScope": "0x000000000000000000000000036cbd53842c5426634e7929541ec2318f3dcf7e",
+      "positionOwner": "0x1111111111111111111111111111111111111111",
+      "recipient": "0x2222222222222222222222222222222222222222",
+      "refundRecipient": "GAUHMCMUP5FZO5675W3ISZ6E6CNYJGXBUW5WANE2JR4TGAARYCTSCBKI",
+      "maxFee": {
+        "raw": "5000000",
+        "decimals": 7
+      },
+      "createdAt": 1791360000,
+      "actionDeadline": 1791363600,
+      "deliveryTimeoutSecs": 1800,
+      "nonce": "1",
+      "intentId": "0xe018250d15d741cf7daae2f57406fb0195a7e906e3476c3b7e7b8fd677818ef6"
+    }
+  ]
+}

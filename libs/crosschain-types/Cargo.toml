@@ -1,0 +1,16 @@
+[package]
+name = "astrion-crosschain-types"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Canonical cross-chain intent, receipt and network types for Astrion (spec/ v1)."
+
+[lib]
+crate-type = ["lib"]
+doctest = false
+
+# no_std + alloc so `cargo build --workspace --target wasm32v1-none` still works.
+[dependencies]
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+sha3 = { version = "0.10", default-features = false }

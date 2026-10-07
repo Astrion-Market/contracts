@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astrion.market/spec/v1/scoped-account.schema.json",
+  "title": "Scoped execution account",
+  "description": "One user-owned EVM account per (owner, network, protocol, marketScope, version). It owns its own collateral, supply claims and debt.",
+  "type": "object",
+  "required": ["schemaVersion", "owner", "network", "protocol", "marketScope", "version", "account"],
+  "properties": {
+    "schemaVersion": { "$ref": "common.schema.json#/$defs/schemaVersion" },
+    "owner": { "$ref": "common.schema.json#/$defs/evmAddress" },
+    "network": { "$ref": "common.schema.json#/$defs/networkId" },
+    "protocol": { "$ref": "common.schema.json#/$defs/protocol" },
+    "marketScope": {
+      "description": "Aave/Compound: reserve or Comet address padded to bytes32. Morpho Blue: canonical market id.",
+      "$ref": "common.schema.json#/$defs/bytes32"
+    },
+    "version": { "type": "integer", "minimum": 1 },
+    "account": { "$ref": "common.schema.json#/$defs/evmAddress" }
+  }
+}

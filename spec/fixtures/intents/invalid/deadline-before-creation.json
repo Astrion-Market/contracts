@@ -1,0 +1,33 @@
+{
+  "description": "actionDeadline not after createdAt",
+  "expect": "InvalidDeadline",
+  "intents": [
+    {
+      "schemaVersion": 1,
+      "action": "lend",
+      "sourceNetwork": "stellar-testnet",
+      "destinationNetwork": "base-sepolia",
+      "asset": {
+        "symbol": "USDC"
+      },
+      "amount": {
+        "raw": "1000000000",
+        "decimals": 7
+      },
+      "protocol": "aave-v3",
+      "marketScope": "0x000000000000000000000000036cbd53842c5426634e7929541ec2318f3dcf7e",
+      "positionOwner": "0x1111111111111111111111111111111111111111",
+      "recipient": "0x2222222222222222222222222222222222222222",
+      "refundRecipient": "GAUHMCMUP5FZO5675W3ISZ6E6CNYJGXBUW5WANE2JR4TGAARYCTSCBKI",
+      "maxFee": {
+        "raw": "5000000",
+        "decimals": 7
+      },
+      "createdAt": 1791360000,
+      "actionDeadline": 1791360000,
+      "deliveryTimeoutSecs": 1800,
+      "nonce": "1",
+      "intentId": "0x415496005fb1c3719e5ef042e51da60a78ce6cba3d1ceade26fc7a8dec0a6616"
+    }
+  ]
+}

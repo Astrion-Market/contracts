@@ -1,0 +1,33 @@
+{
+  "description": "maxFee larger than amount",
+  "expect": "FeeExceedsAmount",
+  "intents": [
+    {
+      "schemaVersion": 1,
+      "action": "lend",
+      "sourceNetwork": "stellar-testnet",
+      "destinationNetwork": "base-sepolia",
+      "asset": {
+        "symbol": "USDC"
+      },
+      "amount": {
+        "raw": "1000000000",
+        "decimals": 7
+      },
+      "protocol": "aave-v3",
+      "marketScope": "0x000000000000000000000000036cbd53842c5426634e7929541ec2318f3dcf7e",
+      "positionOwner": "0x1111111111111111111111111111111111111111",
+      "recipient": "0x2222222222222222222222222222222222222222",
+      "refundRecipient": "GAUHMCMUP5FZO5675W3ISZ6E6CNYJGXBUW5WANE2JR4TGAARYCTSCBKI",
+      "maxFee": {
+        "raw": "1000000001",
+        "decimals": 7
+      },
+      "createdAt": 1791360000,
+      "actionDeadline": 1791363600,
+      "deliveryTimeoutSecs": 1800,
+      "nonce": "1",
+      "intentId": "0xcc954c3844ff5f1cd811959d0d5d73f184b013c092754e1ad9cea221b6375211"
+    }
+  ]
+}

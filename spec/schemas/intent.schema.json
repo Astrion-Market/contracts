@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astrion.market/spec/v1/intent.schema.json",
+  "title": "Cross-chain operation intent",
+  "description": "What the user asked for. intentId = keccak256(canonical JSON of this object without intentId). Canonical JSON: UTF-8, object keys sorted by code point, no insignificant whitespace, ASCII-only content. Semantic rules not expressible here are listed in spec/README.md and enforced by libs/crosschain-types.",
+  "type": "object",
+  "required": [
+    "schemaVersion", "intentId", "action", "sourceNetwork", "destinationNetwork",
+    "asset", "amount", "positionOwner", "recipient", "refundRecipient", "maxFee",
+    "createdAt", "actionDeadline", "deliveryTimeoutSecs", "nonce"
+  ],
+  "properties": {
+    "schemaVersion": { "$ref": "common.schema.json#/$defs/schemaVersion" },
+    "intentId": { "$ref": "common.schema.json#/$defs/bytes32" },
+    "action": {
+      "enum": ["lend", "withdraw", "supply_collateral", "withdraw_collateral", "borrow", "repay", "transfer"]
+    },
+    "sourceNetwork": { "$ref": "common.schema.json#/$defs/networkId" },
+    "destinationNetwork": { "$ref": "common.schema.json#/$defs/networkId" },
+    "asset": {
+      "type": "object",
+      "required": ["symbol"],
+      "properties": { "symbol": { "const": "USDC" } }
+    },
+    "amount": {
+      "description": "Raw amount in SOURCE network units (Stellar USDC: 7 decimals; EVM USDC: 6).",
+      "$ref": "common.schema.json#/$defs/amount"
+    },
+    "protocol": { "$ref": "common.schema.json#/$defs/protocol" },
+    "marketScope": { "$ref": "common.schema.json#/$defs/bytes32" },
+    "positionOwner": { "$ref": "common.schema.json#/$defs/evmAddress" },
+    "recipient": {
+      "description": "Final recipient on the destination network. Bound into intentId; a relayer cannot change it.",
+      "$ref": "common.schema.json#/$defs/address"
+    },
+    "refundRecipient": {
+      "description": "Where unconsumed funds return, on the source network.",
+      "$ref": "common.schema.json#/$defs/address"
+    },
+    "maxFee": {
+      "description": "Upper bound on all fees (CCTP fee plus relayer fee) in source units.",
+      "$ref": "common.schema.json#/$defs/amount"
+    },
+    "createdAt": { "$ref": "common.schema.json#/$defs/unixSeconds" },
+    "actionDeadline": {
+      "description": "After this time the destination ACTION must not execute. It never cancels a burn: delivery continues and minted funds stay recoverable.",
+      "$ref": "common.schema.json#/$defs/unixSeconds"
+    },
+    "deliveryTimeoutSecs": {
+      "description": "When the UI escalates a still-undelivered transfer to recovery. Not a cancellation.",
+      "type": "integer", "minimum": 1
+    },
+    "nonce": {
+      "description": "Per-positionOwner replay nonce for the execution action.",
+      "$ref": "common.schema.json#/$defs/uint256"
+    }
+  }
+}
