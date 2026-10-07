@@ -28,3 +28,16 @@ evm-fmt-check:
 
 evm-clean:
 	cd $(EVM_DIR) && $(FORGE) clean
+
+# ─── alpha deployment (manifest-driven; mainnet needs release-approval.json) ──
+.PHONY: evm-deploy evm-smoke route-gates
+evm-deploy:
+	@test -n "$(NETWORK_ID)" || (echo "Usage: make evm-deploy ASTRION_ENV=testnet NETWORK_ID=base-sepolia RPC=<url>" && exit 1)
+	cd $(EVM_DIR) && ASTRION_ENV=$(ASTRION_ENV) NETWORK=$(NETWORK_ID) GIT_COMMIT=$$(git rev-parse HEAD) \
+	  $(FORGE) script script/Deploy.s.sol --rpc-url $(RPC) --broadcast
+
+evm-smoke:
+	cd $(EVM_DIR) && NETWORK=$(NETWORK_ID) $(FORGE) script script/Smoke.s.sol --rpc-url $(RPC)
+
+route-gates:
+	ops/crosschain/route-gates.sh

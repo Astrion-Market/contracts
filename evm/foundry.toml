@@ -21,6 +21,7 @@ remappings = [
 fs_permissions = [
   { access = "read", path = "../deployments/crosschain" },
   { access = "read", path = "../spec" },
+  { access = "read-write", path = "../deployments/crosschain/deployed" },
 ]
 
 [profile.default.fuzz]

@@ -1,0 +1,9 @@
+{
+  "description": "Copy to release-approval.json ONLY when a mainnet release is approved. Deploy.s.sol refuses mainnet chains without it.",
+  "commit": "<full git sha being released>",
+  "chainIds": [8453],
+  "securityReview": "<link to the independent review report and retest>",
+  "operationalReadiness": "<link to completed docs/ops/ALPHA_DEPLOYMENT.md checklist>",
+  "approvedBy": ["<maintainer>", "<maintainer>"],
+  "routeLimits": { "aave-v3:base": { "maxSupplyUsdc": "0", "maxBorrowUsdc": "0" } }
+}
