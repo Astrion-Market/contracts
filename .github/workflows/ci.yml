@@ -45,3 +45,48 @@ jobs:
         with:
           name: coverage-artifacts
           path: coverage-artifacts.tar.gz
+
+  # ─── EVM execution layer: independent of the Rust job ──────────────────────
+  evm:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: evm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.1
+      - name: Format
+        run: forge fmt --check
+      - name: Build
+        run: forge build --sizes
+      - name: Unit tests
+        run: FOUNDRY_PROFILE=ci forge test --no-match-path 'test/fork/*'
+
+  # ─── EVM fork suites: explicit SKIPPED status without RPC secrets ─────────
+  evm-fork:
+    runs-on: ubuntu-latest
+    env:
+      BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+      ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
+    defaults:
+      run:
+        working-directory: evm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.1
+      - name: Report skipped fork suites
+        if: env.BASE_RPC_URL == '' && env.ETH_RPC_URL == ''
+        run: |
+          echo "::warning::Fork suites SKIPPED: BASE_RPC_URL / ETH_RPC_URL secrets are not configured."
+          echo "## EVM fork tests: SKIPPED (no RPC secrets configured)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Fork tests
+        if: env.BASE_RPC_URL != '' || env.ETH_RPC_URL != ''
+        run: forge test --match-path 'test/fork/*' -vv

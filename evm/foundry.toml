@@ -1,0 +1,48 @@
+# Astrion EVM execution layer. Toolchain pinned for reproducible builds:
+#   forge 1.7.1 (CI: foundry-rs/foundry-toolchain, version v1.7.1)
+#   solc 0.8.30, evm cancun (supported by Base and Ethereum)
+#   forge-std v1.17.0, openzeppelin-contracts v5.7.0 (git submodules)
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.30"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+auto_detect_solc = false
+offline = false
+remappings = [
+  "forge-std/=lib/forge-std/src/",
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+]
+fs_permissions = [
+  { access = "read", path = "../deployments/crosschain" },
+  { access = "read", path = "../spec" },
+]
+
+[profile.default.fuzz]
+runs = 256
+# Failing seeds are persisted so CI can replay them.
+failure_persist_dir = "cache/fuzz"
+
+[profile.ci.fuzz]
+runs = 2000
+
+# Fork RPCs come only from the environment; nothing secret lives in the repo.
+# Unset variables make fork suites report SKIPPED (see test/fork/ForkTest.sol).
+[rpc_endpoints]
+base = "${BASE_RPC_URL}"
+ethereum = "${ETH_RPC_URL}"
+base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
+ethereum_sepolia = "${ETH_SEPOLIA_RPC_URL}"
+
+[fmt]
+line_length = 100
+tab_width = 4
+bracket_spacing = false
+int_types = "long"
+quote_style = "double"
+number_underscore = "thousands"

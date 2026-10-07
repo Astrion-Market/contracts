@@ -11,3 +11,7 @@ scripts/
 # Simulation — private keys must NEVER be committed
 sim/*.secret.env
 dev_docs
+# Foundry outputs
+evm/out
+evm/cache
+evm/broadcast
