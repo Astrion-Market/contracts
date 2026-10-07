@@ -103,3 +103,21 @@ branches.
 
 Unit/mock, fork, testnet and production evidence are tracked separately; see
 [ROADMAP](../ROADMAP.md#evidence-levels).
+
+## Return path (EVM → Stellar)
+
+`CctpReturnModule` plans an owner-signed burn of the account's USDC with
+`TokenMessengerV2.depositForBurnWithHook`. The module is pinned like every
+other module.
+- `mintRecipient = destinationCaller = CctpForwarder` (manifest value).
+- The final Stellar recipient is a strkey in hook data, validated **on-chain**
+  (base32, checksum, version) before the burn.
+- `minFinalityThreshold` is 1000 (fast) or 2000 (standard). `maxFee < amount`.
+- The burn amount must be representable on Stellar after scaling by 10.
+- The recipient is inside the signed action, so a relayer retry cannot redirect
+  it. Borrow and withdraw results are separate intents from the return burn,
+  so a delayed delivery never hides the debt. It stays on the protocol and in
+  the lens.
+- Off-chain preflight (trustline, Stellar balance, fee quote) runs before the
+  intent is signed: `ops/crosschain/lib.sh` `require_stellar_trustline` and
+  the SDK builders.
