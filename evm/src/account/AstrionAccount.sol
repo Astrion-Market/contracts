@@ -94,7 +94,9 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
     mapping(bytes32 transferId => TransferReceipt) public receipts;
 
     event Executed(address indexed target, uint256 value, bytes4 selector);
-    event IntentExecuted(uint256 indexed nonce, address indexed module, address relayer, uint256 fee);
+    event IntentExecuted(
+        uint256 indexed nonce, address indexed module, address relayer, uint256 fee
+    );
     event NonceRevoked(uint256 indexed nonce);
     event TransferReceived(
         bytes32 indexed transferId,
@@ -234,10 +236,14 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
         bytes calldata message,
         bytes calldata attestation
     ) external nonReentrant returns (bool executed) {
-        if (intent.transferId == bytes32(0)) revert TransferBindingRequired();
+        if (intent.transferId == bytes32(0)) {
+            revert TransferBindingRequired();
+        }
         if (!receipts[intent.transferId].recorded) {
             bytes32 received = _receiveTransfer(message, attestation);
-            if (received != intent.transferId) revert TransferMismatch(intent.transferId, received);
+            if (received != intent.transferId) {
+                revert TransferMismatch(intent.transferId, received);
+            }
         }
         if (receipts[intent.transferId].consumed) revert TransferAlreadyConsumed();
         try this.runFundedIntent(intent, action, signature, fee, msg.sender) {
@@ -296,7 +302,9 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
             feeExecuted: b.feeExecuted,
             received: received
         });
-        emit TransferReceived(transferId, b.sourceDomain, b.nonce, b.amount, b.feeExecuted, received);
+        emit TransferReceived(
+            transferId, b.sourceDomain, b.nonce, b.amount, b.feeExecuted, received
+        );
     }
 
     function intentDigest(ExecutionIntent calldata intent) public view returns (bytes32) {
@@ -339,8 +347,7 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
         IActionModule.Plan memory p =
             IActionModule(intent.module).plan(address(this), marketScope, intent.recipient, action);
         if (
-            p.increasesRisk
-                && policy.isPaused(policy.routeId(block.chainid, protocol, marketScope))
+            p.increasesRisk && policy.isPaused(policy.routeId(block.chainid, protocol, marketScope))
         ) revert RoutePaused();
 
         for (uint256 i = 0; i < p.calls.length; i++) {
@@ -390,7 +397,11 @@ contract AstrionAccount is ReentrancyGuard, EIP712 {
         internal
         returns (bytes memory result)
     {
-        result = Address.functionCallWithValue(target, data, value);
+        if (data.length == 0) {
+            Address.sendValue(payable(target), value);
+        } else {
+            result = Address.functionCallWithValue(target, data, value);
+        }
         emit Executed(target, value, data.length >= 4 ? bytes4(data) : bytes4(0));
     }
 
