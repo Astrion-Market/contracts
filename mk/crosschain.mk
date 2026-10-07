@@ -18,3 +18,21 @@ sdk-test:
 crosschain-test:
 	cargo test -p astrion-crosschain-types
 	$(MAKE) sdk-test
+
+# ─── CCTP testnet harness (real networks; operator wallets from env) ──────────
+RUN ?=
+.PHONY: cctp-stellar-to-evm cctp-evm-to-stellar cctp-status cctp-evidence
+
+cctp-stellar-to-evm:
+	@test -n "$(RUN)" || (echo "Usage: make cctp-stellar-to-evm RUN=<id> AMOUNT=<7dp raw> [MAX_FEE=] [EVM_NETWORK=base-sepolia]" && exit 1)
+	AMOUNT=$(AMOUNT) MAX_FEE=$(MAX_FEE) ops/crosschain/cctp-transfer.sh stellar-to-evm $(RUN)
+
+cctp-evm-to-stellar:
+	@test -n "$(RUN)" || (echo "Usage: make cctp-evm-to-stellar RUN=<id> AMOUNT=<6dp raw> [MAX_FEE=] [STELLAR_RECIPIENT=]" && exit 1)
+	AMOUNT=$(AMOUNT) MAX_FEE=$(MAX_FEE) ops/crosschain/cctp-transfer.sh evm-to-stellar $(RUN)
+
+cctp-status:
+	ops/crosschain/cctp-transfer.sh status $(RUN)
+
+cctp-evidence:
+	ops/crosschain/evidence.sh $(RUN)
