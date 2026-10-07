@@ -4,3 +4,4 @@ include mk/deploy.mk
 include mk/dev.mk
 include mk/sim.mk
 include mk/evm.mk
+include mk/crosschain.mk

@@ -1,0 +1,326 @@
+{
+  "schemaVersion": 1,
+  "environment": "mainnet",
+  "updatedAt": "2026-10-07T00:00:00Z",
+  "networks": {
+    "ethereum": {
+      "kind": "evm",
+      "chainId": 1,
+      "cctpDomain": 0,
+      "usdc": {
+        "symbol": "USDC",
+        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "decimals": 6,
+        "verification": {
+          "status": "source-documented",
+          "sourceUrl": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+          "checkedAt": "2026-10-07T00:00:00Z",
+          "codeHash": null
+        }
+      },
+      "cctp": {
+        "tokenMessengerV2": "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d",
+        "messageTransmitterV2": "0x81D40F21F12A8F0E3252Bccb954D722d4c464B64",
+        "tokenMinterV2": "0xfd78EE919681417d192449715b2594ab58f5D002",
+        "version": "v2",
+        "verification": {
+          "status": "source-documented",
+          "sourceUrl": "https://developers.circle.com/cctp/references/contract-addresses",
+          "checkedAt": "2026-10-07T00:00:00Z",
+          "codeHash": null
+        }
+      }
+    },
+    "base": {
+      "kind": "evm",
+      "chainId": 8453,
+      "cctpDomain": 6,
+      "usdc": {
+        "symbol": "USDC",
+        "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "decimals": 6,
+        "verification": {
+          "status": "source-documented",
+          "sourceUrl": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+          "checkedAt": "2026-10-07T00:00:00Z",
+          "codeHash": null
+        }
+      },
+      "cctp": {
+        "tokenMessengerV2": "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d",
+        "messageTransmitterV2": "0x81D40F21F12A8F0E3252Bccb954D722d4c464B64",
+        "tokenMinterV2": "0xfd78EE919681417d192449715b2594ab58f5D002",
+        "version": "v2",
+        "verification": {
+          "status": "source-documented",
+          "sourceUrl": "https://developers.circle.com/cctp/references/contract-addresses",
+          "checkedAt": "2026-10-07T00:00:00Z",
+          "codeHash": null
+        }
+      },
+      "nonCanonicalUsdc": [
+        {
+          "symbol": "USDbC",
+          "address": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+          "note": "Bridged USD Base Coin. NOT native USDC; never a CCTP route asset."
+        }
+      ]
+    },
+    "stellar": {
+      "kind": "stellar",
+      "networkPassphrase": "Public Global Stellar Network ; September 2015",
+      "cctpDomain": 27,
+      "usdc": {
+        "symbol": "USDC",
+        "asset": "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+        "contract": "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75",
+        "decimals": 7,
+        "verification": {
+          "status": "source-documented",
+          "sourceUrl": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+          "checkedAt": "2026-10-07T00:00:00Z",
+          "codeHash": null,
+          "note": "SAC contract id derived locally with `stellar contract id asset`."
+        }
+      },
+      "cctp": {
+        "tokenMessengerMinter": "CAE2G5Z77UP7GYPYGFOWFGW7C7J6I4YP2AFGSADRKQY62SYUFLPNFTXL",
+        "messageTransmitter": "CACMENFFJPJMSDAJQLX4R7K3SFZIW2LJSE3R2UMLGSWHFHS353FVXAZV",
+        "cctpForwarder": "CBZL2IH7F6BIDAA3WBNXYKIXSATJGMSW7K5P5MJ6STX5RXN47TZJDF5T",
+        "version": "v2",
+        "verification": {
+          "status": "source-documented",
+          "sourceUrl": "https://developers.circle.com/cctp/references/stellar-contracts",
+          "checkedAt": "2026-10-07T00:00:00Z",
+          "codeHash": null
+        }
+      }
+    }
+  },
+  "routes": [
+    {
+      "id": "aave-v3:base",
+      "protocol": "aave-v3",
+      "network": "base",
+      "protocolVersion": "3",
+      "targets": {
+        "pool": "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5",
+        "poolAddressesProvider": "0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D"
+      },
+      "verification": {
+        "status": "pending",
+        "sourceUrl": "https://aave.com/docs/resources/addresses",
+        "checkedAt": "2026-10-07T00:00:00Z",
+        "codeHash": null,
+        "note": "Address from protocol registry; bytecode and parameters not yet verified (ops/crosschain/verify-manifest.sh)."
+      },
+      "markets": [
+        {
+          "marketScope": "0x000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "loanAsset": "usdc",
+          "approved": false
+        }
+      ],
+      "capabilities": {
+        "lend": true,
+        "supplyCollateral": true,
+        "borrow": true,
+        "repay": true,
+        "withdraw": true
+      },
+      "riskReads": [
+        "getReserveData(address)",
+        "getConfiguration(address)",
+        "getUserAccountData(address)",
+        "paused()"
+      ],
+      "enabled": false,
+      "status": "pending-verification",
+      "reason": "Bytecode, reserve configuration, caps and eMode/isolation settings not yet verified."
+    },
+    {
+      "id": "aave-v3:ethereum",
+      "protocol": "aave-v3",
+      "network": "ethereum",
+      "protocolVersion": "3",
+      "targets": {
+        "pool": "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
+        "poolAddressesProvider": "0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e"
+      },
+      "verification": {
+        "status": "pending",
+        "sourceUrl": "https://aave.com/docs/resources/addresses",
+        "checkedAt": "2026-10-07T00:00:00Z",
+        "codeHash": null,
+        "note": "Address from protocol registry; bytecode and parameters not yet verified (ops/crosschain/verify-manifest.sh)."
+      },
+      "markets": [
+        {
+          "marketScope": "0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "loanAsset": "usdc",
+          "approved": false
+        }
+      ],
+      "capabilities": {
+        "lend": true,
+        "supplyCollateral": true,
+        "borrow": true,
+        "repay": true,
+        "withdraw": true
+      },
+      "riskReads": [
+        "getReserveData(address)",
+        "getConfiguration(address)",
+        "getUserAccountData(address)",
+        "paused()"
+      ],
+      "enabled": false,
+      "status": "pending-verification",
+      "reason": "Ethereum is the second execution chain; gated until the Base release passes."
+    },
+    {
+      "id": "morpho-blue:base",
+      "protocol": "morpho-blue",
+      "network": "base",
+      "protocolVersion": "1",
+      "targets": {
+        "morpho": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"
+      },
+      "verification": {
+        "status": "pending",
+        "sourceUrl": "https://docs.morpho.org/developers/contracts/addresses/",
+        "checkedAt": "2026-10-07T00:00:00Z",
+        "codeHash": null,
+        "note": "Address from protocol registry; bytecode and parameters not yet verified (ops/crosschain/verify-manifest.sh)."
+      },
+      "markets": [],
+      "capabilities": {
+        "lend": true,
+        "supplyCollateral": true,
+        "borrow": true,
+        "repay": true,
+        "withdraw": true
+      },
+      "riskReads": [
+        "idToMarketParams(bytes32)",
+        "market(bytes32)",
+        "position(bytes32,address)"
+      ],
+      "enabled": false,
+      "status": "unavailable",
+      "reason": "No Morpho Blue market approved yet: each needs reviewed market params (oracle, IRM, LLTV) and liquidity."
+    },
+    {
+      "id": "morpho-blue:ethereum",
+      "protocol": "morpho-blue",
+      "network": "ethereum",
+      "protocolVersion": "1",
+      "targets": {
+        "morpho": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"
+      },
+      "verification": {
+        "status": "pending",
+        "sourceUrl": "https://docs.morpho.org/developers/contracts/addresses/",
+        "checkedAt": "2026-10-07T00:00:00Z",
+        "codeHash": null,
+        "note": "Address from protocol registry; bytecode and parameters not yet verified (ops/crosschain/verify-manifest.sh)."
+      },
+      "markets": [],
+      "capabilities": {
+        "lend": true,
+        "supplyCollateral": true,
+        "borrow": true,
+        "repay": true,
+        "withdraw": true
+      },
+      "riskReads": [
+        "idToMarketParams(bytes32)",
+        "market(bytes32)",
+        "position(bytes32,address)"
+      ],
+      "enabled": false,
+      "status": "unavailable",
+      "reason": "No Morpho Blue market approved yet; Ethereum gated behind Base."
+    },
+    {
+      "id": "compound-v3:base",
+      "protocol": "compound-v3",
+      "network": "base",
+      "protocolVersion": "3",
+      "targets": {
+        "comet": "0xb125E6687d4313864e53df431d5425969c15Eb2F"
+      },
+      "verification": {
+        "status": "pending",
+        "sourceUrl": "https://docs.compound.finance/#networks",
+        "checkedAt": "2026-10-07T00:00:00Z",
+        "codeHash": null,
+        "note": "Address from protocol registry; bytecode and parameters not yet verified (ops/crosschain/verify-manifest.sh)."
+      },
+      "markets": [
+        {
+          "marketScope": "0x000000000000000000000000b125e6687d4313864e53df431d5425969c15eb2f",
+          "loanAsset": "usdc",
+          "approved": false
+        }
+      ],
+      "capabilities": {
+        "lend": true,
+        "supplyCollateral": true,
+        "borrow": true,
+        "repay": true,
+        "withdraw": true
+      },
+      "riskReads": [
+        "isSupplyPaused()",
+        "isWithdrawPaused()",
+        "baseBorrowMin()",
+        "borrowBalanceOf(address)",
+        "getAssetInfoByAddress(address)"
+      ],
+      "enabled": false,
+      "status": "unavailable",
+      "reason": "Third protocol is provisional until confirmed; cUSDCv3 base asset, baseBorrowMin and collateral list not verified."
+    },
+    {
+      "id": "compound-v3:ethereum",
+      "protocol": "compound-v3",
+      "network": "ethereum",
+      "protocolVersion": "3",
+      "targets": {
+        "comet": "0xc3d688B66703497DAA19211EEdff47f25384cdc3"
+      },
+      "verification": {
+        "status": "pending",
+        "sourceUrl": "https://docs.compound.finance/#networks",
+        "checkedAt": "2026-10-07T00:00:00Z",
+        "codeHash": null,
+        "note": "Address from protocol registry; bytecode and parameters not yet verified (ops/crosschain/verify-manifest.sh)."
+      },
+      "markets": [
+        {
+          "marketScope": "0x000000000000000000000000c3d688b66703497daa19211eedff47f25384cdc3",
+          "loanAsset": "usdc",
+          "approved": false
+        }
+      ],
+      "capabilities": {
+        "lend": true,
+        "supplyCollateral": true,
+        "borrow": true,
+        "repay": true,
+        "withdraw": true
+      },
+      "riskReads": [
+        "isSupplyPaused()",
+        "isWithdrawPaused()",
+        "baseBorrowMin()",
+        "borrowBalanceOf(address)",
+        "getAssetInfoByAddress(address)"
+      ],
+      "enabled": false,
+      "status": "unavailable",
+      "reason": "Third protocol is provisional until confirmed; Ethereum gated behind Base."
+    }
+  ]
+}

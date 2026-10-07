@@ -1,0 +1,245 @@
+{
+  "schemaVersion": 1,
+  "environment": "testnet",
+  "updatedAt": "2026-10-07T00:00:00Z",
+  "networks": {
+    "ethereum-sepolia": {
+      "kind": "evm",
+      "chainId": 11155111,
+      "cctpDomain": 0,
+      "usdc": {
+        "symbol": "USDC",
+        "address": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+        "decimals": 6,
+        "verification": {
+          "status": "source-documented",
+          "sourceUrl": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+          "checkedAt": "2026-10-07T00:00:00Z",
+          "codeHash": null
+        }
+      },
+      "cctp": {
+        "tokenMessengerV2": "0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA",
+        "messageTransmitterV2": "0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275",
+        "tokenMinterV2": "0xb43db544E2c27092c107639Ad201b3dEfAbcF192",
+        "version": "v2",
+        "verification": {
+          "status": "source-documented",
+          "sourceUrl": "https://developers.circle.com/cctp/references/contract-addresses",
+          "checkedAt": "2026-10-07T00:00:00Z",
+          "codeHash": null
+        }
+      }
+    },
+    "base-sepolia": {
+      "kind": "evm",
+      "chainId": 84532,
+      "cctpDomain": 6,
+      "usdc": {
+        "symbol": "USDC",
+        "address": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        "decimals": 6,
+        "verification": {
+          "status": "source-documented",
+          "sourceUrl": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+          "checkedAt": "2026-10-07T00:00:00Z",
+          "codeHash": null
+        }
+      },
+      "cctp": {
+        "tokenMessengerV2": "0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA",
+        "messageTransmitterV2": "0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275",
+        "tokenMinterV2": "0xb43db544E2c27092c107639Ad201b3dEfAbcF192",
+        "version": "v2",
+        "verification": {
+          "status": "source-documented",
+          "sourceUrl": "https://developers.circle.com/cctp/references/contract-addresses",
+          "checkedAt": "2026-10-07T00:00:00Z",
+          "codeHash": null
+        }
+      }
+    },
+    "stellar-testnet": {
+      "kind": "stellar",
+      "networkPassphrase": "Test SDF Network ; September 2015",
+      "cctpDomain": 27,
+      "usdc": {
+        "symbol": "USDC",
+        "asset": "USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+        "contract": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+        "decimals": 7,
+        "verification": {
+          "status": "source-documented",
+          "sourceUrl": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+          "checkedAt": "2026-10-07T00:00:00Z",
+          "codeHash": null,
+          "note": "SAC contract id derived locally; matches Circle's Stellar quickstart."
+        }
+      },
+      "cctp": {
+        "tokenMessengerMinter": "CDNG7HXAPBWICI2E3AUBP3YZWZELJLYSB6F5CC7WLDTLTHVM74SLRTHP",
+        "messageTransmitter": "CBJ6MTCKKZG73PMDZCJMSFRD7DQEMI4FKDH7CGDSV4W6FHCRBCQAVVJY",
+        "cctpForwarder": "CA66Q2WFBND6V4UEB7RD4SAXSVIWMD6RA4X3U32ELVFGXV5PJK4T4VSZ",
+        "version": "v2",
+        "verification": {
+          "status": "source-documented",
+          "sourceUrl": "https://developers.circle.com/cctp/references/stellar-contracts",
+          "checkedAt": "2026-10-07T00:00:00Z",
+          "codeHash": null
+        }
+      }
+    }
+  },
+  "routes": [
+    {
+      "id": "aave-v3:base-sepolia",
+      "protocol": "aave-v3",
+      "network": "base-sepolia",
+      "protocolVersion": "3",
+      "targets": {},
+      "verification": null,
+      "markets": [],
+      "capabilities": {
+        "lend": true,
+        "supplyCollateral": true,
+        "borrow": true,
+        "repay": true,
+        "withdraw": true
+      },
+      "riskReads": [
+        "getReserveData(address)",
+        "getConfiguration(address)",
+        "getUserAccountData(address)",
+        "paused()"
+      ],
+      "enabled": false,
+      "status": "unavailable",
+      "reason": "No verified Aave V3 deployment on base-sepolia whose loan asset is Circle CCTP USDC (0x036CbD53842c5426634e7929541eC2318f3dCF7e); protocol testnets use faucet tokens. Lending on testnet uses fork tests instead."
+    },
+    {
+      "id": "aave-v3:ethereum-sepolia",
+      "protocol": "aave-v3",
+      "network": "ethereum-sepolia",
+      "protocolVersion": "3",
+      "targets": {},
+      "verification": null,
+      "markets": [],
+      "capabilities": {
+        "lend": true,
+        "supplyCollateral": true,
+        "borrow": true,
+        "repay": true,
+        "withdraw": true
+      },
+      "riskReads": [
+        "getReserveData(address)",
+        "getConfiguration(address)",
+        "getUserAccountData(address)",
+        "paused()"
+      ],
+      "enabled": false,
+      "status": "unavailable",
+      "reason": "No verified Aave V3 deployment on ethereum-sepolia whose loan asset is Circle CCTP USDC (0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238); protocol testnets use faucet tokens. Lending on testnet uses fork tests instead."
+    },
+    {
+      "id": "morpho-blue:base-sepolia",
+      "protocol": "morpho-blue",
+      "network": "base-sepolia",
+      "protocolVersion": "1",
+      "targets": {},
+      "verification": null,
+      "markets": [],
+      "capabilities": {
+        "lend": true,
+        "supplyCollateral": true,
+        "borrow": true,
+        "repay": true,
+        "withdraw": true
+      },
+      "riskReads": [
+        "idToMarketParams(bytes32)",
+        "market(bytes32)",
+        "position(bytes32,address)"
+      ],
+      "enabled": false,
+      "status": "unavailable",
+      "reason": "No verified Morpho Blue deployment on base-sepolia whose loan asset is Circle CCTP USDC (0x036CbD53842c5426634e7929541eC2318f3dCF7e); protocol testnets use faucet tokens. Lending on testnet uses fork tests instead."
+    },
+    {
+      "id": "morpho-blue:ethereum-sepolia",
+      "protocol": "morpho-blue",
+      "network": "ethereum-sepolia",
+      "protocolVersion": "1",
+      "targets": {},
+      "verification": null,
+      "markets": [],
+      "capabilities": {
+        "lend": true,
+        "supplyCollateral": true,
+        "borrow": true,
+        "repay": true,
+        "withdraw": true
+      },
+      "riskReads": [
+        "idToMarketParams(bytes32)",
+        "market(bytes32)",
+        "position(bytes32,address)"
+      ],
+      "enabled": false,
+      "status": "unavailable",
+      "reason": "No verified Morpho Blue deployment on ethereum-sepolia whose loan asset is Circle CCTP USDC (0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238); protocol testnets use faucet tokens. Lending on testnet uses fork tests instead."
+    },
+    {
+      "id": "compound-v3:base-sepolia",
+      "protocol": "compound-v3",
+      "network": "base-sepolia",
+      "protocolVersion": "3",
+      "targets": {},
+      "verification": null,
+      "markets": [],
+      "capabilities": {
+        "lend": true,
+        "supplyCollateral": true,
+        "borrow": true,
+        "repay": true,
+        "withdraw": true
+      },
+      "riskReads": [
+        "isSupplyPaused()",
+        "isWithdrawPaused()",
+        "baseBorrowMin()",
+        "borrowBalanceOf(address)",
+        "getAssetInfoByAddress(address)"
+      ],
+      "enabled": false,
+      "status": "unavailable",
+      "reason": "No verified Compound III deployment on base-sepolia whose loan asset is Circle CCTP USDC (0x036CbD53842c5426634e7929541eC2318f3dCF7e); protocol testnets use faucet tokens. Lending on testnet uses fork tests instead."
+    },
+    {
+      "id": "compound-v3:ethereum-sepolia",
+      "protocol": "compound-v3",
+      "network": "ethereum-sepolia",
+      "protocolVersion": "3",
+      "targets": {},
+      "verification": null,
+      "markets": [],
+      "capabilities": {
+        "lend": true,
+        "supplyCollateral": true,
+        "borrow": true,
+        "repay": true,
+        "withdraw": true
+      },
+      "riskReads": [
+        "isSupplyPaused()",
+        "isWithdrawPaused()",
+        "baseBorrowMin()",
+        "borrowBalanceOf(address)",
+        "getAssetInfoByAddress(address)"
+      ],
+      "enabled": false,
+      "status": "unavailable",
+      "reason": "No verified Compound III deployment on ethereum-sepolia whose loan asset is Circle CCTP USDC (0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238); protocol testnets use faucet tokens. Lending on testnet uses fork tests instead."
+    }
+  ]
+}
